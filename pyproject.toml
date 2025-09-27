@@ -1,0 +1,55 @@
+[project]
+name = "toaster-3000"
+version = "0.1.0"
+description = "AI voice agent with toaster personality combining TTS, STT, and conversational AI"
+readme = "README.md"
+authors = [
+    { name = "Rick Anderson", email = "rick.rickanderson@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastrtc",
+    "smolagents",
+    "gradio>=5.0.0",
+    "python-dotenv",
+    "faster-whisper",
+    "numpy",
+    "sounddevice",
+    "soundfile",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+]
+
+[project.scripts]
+toaster = "toaster_3000.toaster_3000:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--cov=src/toaster_3000 --cov-report=term-missing"
