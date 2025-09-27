@@ -66,6 +66,38 @@ uv build
 uv run pytest
 ```
 
+### UI Testing with Playwright MCP
+This project includes comprehensive UI testing capabilities using Playwright MCP:
+
+```bash
+# View UI testing guide
+uv run python test_ui_demo.py --guide
+
+# Quick test commands
+uv run python test_ui_demo.py --quick
+
+# Run UI test suite
+uv run pytest tests/ui/
+
+# Install UI testing dependencies
+uv sync --extra ui-testing
+```
+
+**Playwright MCP Integration**:
+- Configured MCP server: `claude mcp list` shows available servers
+- Tests use accessibility tree approach (no screenshots needed)
+- Supports cross-browser testing (Chrome, Firefox, WebKit)
+- Real-time UI verification during development
+
+**Test Coverage**:
+- Page load and navigation
+- Text input and conversation flow
+- Audio component visibility
+- Model selection and configuration
+- Responsive design verification
+- Accessibility compliance
+- Error handling scenarios
+
 ### Code Quality
 ```bash
 # Format code

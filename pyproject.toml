@@ -16,6 +16,7 @@ dependencies = [
     "numpy",
     "sounddevice",
     "soundfile",
+    "hf-xet>=1.1.10",
 ]
 
 [project.optional-dependencies]
@@ -27,9 +28,15 @@ dev = [
     "flake8",
     "mypy",
 ]
+ui-testing = [
+    "pytest>=7.0.0",
+    "pytest-asyncio",
+    "requests",
+]
 
 [project.scripts]
 toaster = "toaster_3000.toaster_3000:main"
+test-ui = "test_ui_demo:main"
 
 [build-system]
 requires = ["hatchling"]
