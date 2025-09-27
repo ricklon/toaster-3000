@@ -3,9 +3,9 @@ import os
 import sys
 import threading
 import time
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 import gradio as gr
-import numpy as np
 
 # Add dotenv import
 from dotenv import find_dotenv, load_dotenv
@@ -95,14 +95,8 @@ if not hf_api_key:
         print("No API key provided. Exiting.")
         sys.exit(1)
 
-# Use a freely available model instead of the Qwen model
-# Options include: gpt2, facebook/opt-125m, EleutherAI/pythia-70m
-model_id = os.getenv(
-    "MODEL_NAME", "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-)  # Default to gpt2 if not specified
-model_id = os.getenv(
-    "MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct"
-)  # Default to gpt2 if not specified
+# Use the configured model from environment
+model_id = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
 print(f"Using model: {model_id}")
 
 # Initialize with the API key and model_id
@@ -150,13 +144,33 @@ toaster_theme = gr.themes.Soft(
 )
 
 # Create the global chat history to maintain conversation state
-chat_history = []
+chat_history: List[Dict[str, str]] = []
 
-# Custom CSS for toaster theme - updated for Gradio 5.x
+# Custom CSS for toaster theme - updated for Gradio 5.x with mobile responsiveness
 toaster_css = """
+/* Base container with responsive background */
 .gradio-container {
     background-image: linear-gradient(to bottom right, #FFA07A, #FFE4B5);
+    padding: 10px;
+    min-height: 100vh;
 }
+
+/* Mobile-first responsive design */
+@media (max-width: 768px) {
+    .gradio-container {
+        padding: 5px;
+    }
+
+    .gr-row {
+        flex-direction: column !important;
+    }
+
+    .gr-column {
+        width: 100% !important;
+        margin-bottom: 10px !important;
+    }
+}
+
 .footer {
     color: white !important;
     background-color: #FF6B35 !important;
@@ -166,11 +180,13 @@ toaster_css = """
     text-align: center !important;
     font-weight: bold !important;
 }
+
 .toaster-icon::before {
     content: "🍞";
     font-size: 2em;
     margin-right: 10px;
 }
+
 .gradio-title {
     display: flex !important;
     align-items: center !important;
@@ -178,16 +194,29 @@ toaster_css = """
     font-weight: bold !important;
     color: #FF6B35 !important;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2) !important;
+    font-size: clamp(1.5rem, 4vw, 2.5rem) !important;
+    text-align: center !important;
 }
-/* Updated chat container for Gradio 5.x */
+
+/* Responsive chat container */
 #conversation-display {
     height: 300px;
+    max-height: 50vh;
     overflow-y: auto;
     border-radius: 10px;
     background-color: rgba(255, 255, 255, 0.8);
     padding: 10px;
     margin-top: 15px;
 }
+
+@media (max-width: 768px) {
+    #conversation-display {
+        height: 250px;
+        max-height: 40vh;
+        padding: 8px;
+    }
+}
+
 .chat-container {
     background-color: rgba(255, 255, 255, 0.8) !important;
     border-radius: 10px !important;
@@ -196,61 +225,91 @@ toaster_css = """
     max-height: 300px !important;
     overflow-y: auto !important;
 }
+
 .user-message {
     background-color: #E8F4FA !important;
     padding: 8px !important;
     border-radius: 10px !important;
     margin-bottom: 8px !important;
     border-left: 4px solid #4F8EC9 !important;
+    word-wrap: break-word !important;
 }
+
 .bot-message {
     background-color: #FFF3E0 !important;
     padding: 8px !important;
     border-radius: 10px !important;
     margin-bottom: 8px !important;
     border-left: 4px solid #FF6B35 !important;
+    word-wrap: break-word !important;
 }
-/* Gradio 5.x specific styles */
+
+/* Responsive Gradio components */
 .gr-interface {
     border-radius: 12px !important;
     overflow: hidden !important;
 }
+
 .gr-button {
     background-color: #FF6B35 !important;
     color: white !important;
     border: none !important;
+    padding: 12px 20px !important;
+    border-radius: 8px !important;
+    font-size: clamp(0.9rem, 2.5vw, 1rem) !important;
+    min-height: 44px !important; /* Touch-friendly size */
 }
+
 .gr-button:hover {
     background-color: #FF8C5A !important;
 }
+
 .gr-form {
     border-radius: 10px !important;
     background-color: rgba(255, 255, 255, 0.6) !important;
 }
-/* Push to talk button styling */
+
+/* Responsive audio components */
+.gr-audio {
+    width: 100% !important;
+}
+
+@media (max-width: 768px) {
+    .gr-audio {
+        min-height: 120px !important;
+    }
+}
+
+/* Push to talk button styling - mobile optimized */
 .push-to-talk-btn {
     background-color: #FF6B35 !important;
     color: white !important;
     font-weight: bold !important;
-    padding: 12px 24px !important;
+    padding: 15px 25px !important;
     border-radius: 50px !important;
     margin: 10px auto !important;
     display: block !important;
     transition: all 0.2s !important;
     border: 2px solid #E55B2B !important;
+    min-height: 50px !important; /* Touch-friendly */
+    font-size: clamp(1rem, 3vw, 1.1rem) !important;
 }
+
 .push-to-talk-btn:hover {
     background-color: #FF8C5A !important;
     transform: scale(1.05) !important;
 }
+
 .push-to-talk-btn:active {
     background-color: #E55B2B !important;
     transform: scale(0.98) !important;
 }
+
 .recording .push-to-talk-btn {
     background-color: #E55B2B !important;
     animation: pulse 1.5s infinite !important;
 }
+
 @keyframes pulse {
     0% {
         box-shadow: 0 0 0 0 rgba(229, 91, 43, 0.7);
@@ -262,25 +321,63 @@ toaster_css = """
         box-shadow: 0 0 0 0 rgba(229, 91, 43, 0);
     }
 }
+
+/* Responsive input sections */
 .input-section {
     background-color: rgba(255, 255, 255, 0.6) !important;
     border-radius: 10px !important;
-    padding: 10px !important;
+    padding: 15px !important;
     margin-top: 15px !important;
+    width: 100% !important;
 }
+
+@media (max-width: 768px) {
+    .input-section {
+        padding: 10px !important;
+        margin-top: 10px !important;
+    }
+}
+
 .toaster-intro {
     background-color: #FFF3E0 !important;
     padding: 15px !important;
     border-radius: 10px !important;
     margin-bottom: 15px !important;
     border-left: 4px solid #FF6B35 !important;
-    font-size: 1.1em !important;
+    font-size: clamp(1rem, 2.5vw, 1.1rem) !important;
     line-height: 1.4 !important;
+}
+
+/* Responsive text inputs */
+.gr-textbox {
+    font-size: clamp(0.9rem, 2.5vw, 1rem) !important;
+}
+
+/* Touch-friendly sliders and dropdowns */
+.gr-slider input {
+    min-height: 44px !important;
+}
+
+.gr-dropdown {
+    min-height: 44px !important;
+}
+
+/* Responsive markdown */
+.gr-markdown {
+    font-size: clamp(0.9rem, 2.5vw, 1rem) !important;
+}
+
+/* Responsive row spacing */
+@media (max-width: 768px) {
+    .gr-row {
+        gap: 10px !important;
+        margin-bottom: 15px !important;
+    }
 }
 """
 
 
-def format_chat_history(history):
+def format_chat_history(history: List[Dict[str, str]]) -> str:
     """Format the chat history for displaying in the UI"""
     formatted = "<div class='chat-container'>"
     for msg in history:
@@ -311,7 +408,7 @@ def format_chat_history(history):
     return formatted
 
 
-def update_conversation_display():
+def update_conversation_display() -> Optional[Any]:
     """Update the conversation display element with the current chat history"""
     if ui_elements.conversation_display is not None:
         try:
@@ -321,112 +418,70 @@ def update_conversation_display():
             print(f"Error updating conversation display: {e}")
 
 
-# Add this new function for sequential TTS generation
-def generate_sequential_tts(text_response):
+# Function to generate complete TTS for Gradio interface
+def generate_complete_tts(text_response: str) -> Optional[Tuple[int, Any]]:
     """
-    Generate TTS for longer responses by playing segments sequentially
-    Returns a tuple of (sample_rate, audio_data) with the first segment,
-    and triggers sequential playback of the rest
+    Generate TTS for the complete response to be played through Gradio
+    Returns a tuple of (sample_rate, complete_audio_data)
     """
-    try:
-        import sounddevice as sd
-    except ImportError:
-        print("Warning: sounddevice module not found. Installing...")
-        try:
-            # Try to install sounddevice
-            import subprocess
-
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "sounddevice"]
-            )
-            import sounddevice as sd
-
-            print("Successfully installed sounddevice")
-        except Exception as e:
-            print(f"Error installing sounddevice: {e}")
-            print("Will continue without sequential playback")
-
-    # Split response into segments
+    # Split response into segments for processing
     response_segments = split_text_into_segments(text_response, max_length=300)
     print(f"Response split into {len(response_segments)} segments")
 
     if not response_segments:
         return None
 
-    # Get audio for the first segment to return immediately
-    first_segment = response_segments[0]
-    print(f"Processing first segment: {first_segment[:50]}...")
-    first_audio_chunks = list(tts_model.stream_tts_sync(first_segment, options=options))
+    try:
+        import numpy as np
 
-    if not first_audio_chunks:
-        return None
+        all_audio_data = []
+        sample_rate = None
 
-    first_audio = first_audio_chunks[0]
+        # Process each segment and collect audio
+        for i, segment in enumerate(response_segments):
+            print(
+                f"Processing segment {i+1}/{len(response_segments)}: {segment[:50]}..."
+            )
+            audio_chunks = list(tts_model.stream_tts_sync(segment, options=options))
 
-    # If there are more segments, start a background thread to play them sequentially
-    if len(response_segments) > 1:
+            if audio_chunks:
+                audio_data = audio_chunks[0]
+                if isinstance(audio_data, tuple):
+                    seg_rate, seg_audio = audio_data
+                    if sample_rate is None:
+                        sample_rate = seg_rate
+                    # Convert to numpy array if needed
+                    if hasattr(seg_audio, "shape"):
+                        all_audio_data.append(seg_audio)
+                    else:
+                        all_audio_data.append(np.array(seg_audio))
 
-        def play_remaining_segments():
-            try:
-                import sounddevice as sd
+        # Concatenate all audio segments
+        if all_audio_data and sample_rate:
+            complete_audio = np.concatenate(all_audio_data)
+            print(
+                f"Generated complete audio: {len(complete_audio)} samples at {sample_rate}Hz"
+            )
+            return (sample_rate, complete_audio)
 
-                # Wait for the first segment to finish playing
-                # Calculate duration of first segment and add a small buffer
-                if isinstance(first_audio, tuple):
-                    sample_rate, audio_data = first_audio
-                    duration = len(audio_data) / sample_rate + 0.5  # Add 0.5s buffer
-                else:
-                    # Estimate duration if we don't know the exact format
-                    duration = (
-                        len(first_segment) * 0.1
-                    )  # Rough estimate: 0.1s per character
+    except Exception as e:
+        print(f"Error generating complete TTS: {e}")
+        # Fallback to just the first segment
+        try:
+            first_segment = response_segments[0]
+            first_audio_chunks = list(
+                tts_model.stream_tts_sync(first_segment, options=options)
+            )
+            if first_audio_chunks:
+                return first_audio_chunks[0]
+        except Exception as fallback_error:
+            print(f"Fallback TTS also failed: {fallback_error}")
 
-                # Wait before playing the next segment
-                time.sleep(duration)
-
-                # Play each subsequent segment
-                for i, segment in enumerate(response_segments[1:], 1):
-                    print(
-                        f"Playing segment {i+1}/{len(response_segments)}: {segment[:50]}..."
-                    )
-
-                    try:
-                        audio_chunks = list(
-                            tts_model.stream_tts_sync(segment, options=options)
-                        )
-                        if audio_chunks:
-                            audio_data = audio_chunks[0]
-
-                            if isinstance(audio_data, tuple):
-                                segment_rate, segment_audio = audio_data
-                                sd.play(segment_audio, segment_rate)
-                                # Wait for audio to finish
-                                segment_duration = (
-                                    len(segment_audio) / segment_rate + 0.5
-                                )
-                                time.sleep(segment_duration)
-                            else:
-                                # If we don't understand the format, just wait based on text length
-                                print(
-                                    f"Unknown audio format for segment {i+1}, skipping playback"
-                                )
-                                time.sleep(len(segment) * 0.1)
-                    except Exception as e:
-                        print(f"Error playing segment {i+1}: {e}")
-                        time.sleep(1)  # Wait a bit before continuing
-
-            except Exception as e:
-                print(f"Error in sequential TTS playback: {e}")
-
-        # Start the background thread for sequential playback
-        threading.Thread(target=play_remaining_segments, daemon=True).start()
-
-    # Return the first segment's audio immediately
-    return first_audio
+    return None
 
 
 # Helper function to get agent response with chat history
-def get_agent_response_with_memory(user_input):
+def get_agent_response_with_memory(user_input: str) -> str:
     """Get a response from the agent with conversation memory"""
     try:
         # Convert chat history to the format expected by the agent
@@ -445,7 +500,7 @@ def get_agent_response_with_memory(user_input):
         return f"Oh crumbs! The Toaster 3000 is having technical difficulties. Error: {str(agent_error)[:100]}... Would you like to talk about different types of bread instead?"
 
 
-def process_text_input(text):
+def process_text_input(text: str) -> Tuple[str, Any, Optional[Tuple[int, Any]]]:
     """Process text input from the user"""
     if not text.strip():
         return format_chat_history(chat_history), gr.update(value=""), None
@@ -477,7 +532,7 @@ def process_text_input(text):
     )
 
     try:
-        audio_data = generate_sequential_tts(agent_response)
+        audio_data = generate_complete_tts(agent_response)
     except Exception as audio_error:
         print(f"Error generating audio: {audio_error}")
         audio_data = None
@@ -485,7 +540,9 @@ def process_text_input(text):
     return format_chat_history(chat_history), gr.update(value=""), audio_data
 
 
-def process_audio(audio, mode="push-to-talk"):
+def process_audio(
+    audio: Tuple[int, Any], mode: str = "push-to-talk"
+) -> Tuple[str, Optional[Tuple[int, Any]]]:
     """Process audio input from user - either push-to-talk"""
     try:
         # Extract sample rate and audio data
@@ -535,9 +592,9 @@ def process_audio(audio, mode="push-to-talk"):
         # Add bot message to chat history
         chat_history.append({"role": "assistant", "content": agent_response})
 
-        # Generate and play audio sequentially
+        # Generate complete audio for Gradio
         try:
-            audio_data = generate_sequential_tts(agent_response)
+            audio_data = generate_complete_tts(agent_response)
         except Exception as audio_error:
             print(f"Error generating audio: {audio_error}")
             audio_data = None
@@ -552,9 +609,9 @@ def process_audio(audio, mode="push-to-talk"):
         # Add error message to chat history
         chat_history.append({"role": "assistant", "content": error_msg})
 
-        # Generate error audio with sequential playback
+        # Generate error audio for Gradio
         try:
-            audio_data = generate_sequential_tts(error_msg)
+            audio_data = generate_complete_tts(error_msg)
         except Exception as audio_error:
             print(f"Error generating error audio: {audio_error}")
             audio_data = None
@@ -563,7 +620,9 @@ def process_audio(audio, mode="push-to-talk"):
 
 
 # Modify the continuous_audio_processor function to use sequential TTS
-def continuous_audio_processor(audio):
+def continuous_audio_processor(
+    audio: Tuple[int, Any],
+) -> Generator[Tuple[int, Any], None, None]:
     """Process audio in continuous mode and return a generator of audio chunks"""
     try:
         # Extract sample rate and audio data
@@ -619,65 +678,25 @@ def continuous_audio_processor(audio):
             f"Converting toaster response to speech (length: {len(agent_response)} chars)..."
         )
 
-        # For continuous mode, just yield the first segment audio chunks
-        # (additional segments will be played by the sequential TTS in the background)
-        response_segments = split_text_into_segments(agent_response, max_length=300)
-
-        if response_segments:
-            first_segment = response_segments[0]
-            print(f"Processing first segment: {first_segment[:50]}...")
-            try:
-                audio_chunks = list(
-                    tts_model.stream_tts_sync(first_segment, options=options)
-                )
-                if audio_chunks:
-                    # Start a background thread to play the rest of the segments
-                    if len(response_segments) > 1:
-
-                        def play_remaining_segments():
-                            try:
-                                import sounddevice as sd
-
-                                # Wait before playing the next segment
-                                time.sleep(
-                                    2
-                                )  # Give some buffer time for the first segment
-
-                                # Play each subsequent segment
-                                for i, segment in enumerate(response_segments[1:], 1):
-                                    try:
-                                        audio_chunks = list(
-                                            tts_model.stream_tts_sync(
-                                                segment, options=options
-                                            )
-                                        )
-                                        if audio_chunks:
-                                            audio_data = audio_chunks[0]
-
-                                            if isinstance(audio_data, tuple):
-                                                segment_rate, segment_audio = audio_data
-                                                sd.play(segment_audio, segment_rate)
-                                                # Wait for audio to finish
-                                                segment_duration = (
-                                                    len(segment_audio) / segment_rate
-                                                    + 0.5
-                                                )
-                                                time.sleep(segment_duration)
-                                    except Exception as e:
-                                        print(f"Error playing segment {i+1}: {e}")
-                            except Exception as e:
-                                print(f"Error in sequential playback: {e}")
-
-                        # Start the background thread
-                        threading.Thread(
-                            target=play_remaining_segments, daemon=True
-                        ).start()
-
-                    # Yield the first chunk for the continuous mode
-                    yield audio_chunks[0]
-
-            except Exception as e:
-                print(f"Error processing segment: {e}")
+        # Generate complete audio response for Gradio streaming
+        try:
+            complete_audio = generate_complete_tts(agent_response)
+            if complete_audio:
+                yield complete_audio
+        except Exception as e:
+            print(f"Error generating complete TTS: {e}")
+            # Fallback to first segment only
+            response_segments = split_text_into_segments(agent_response, max_length=300)
+            if response_segments:
+                first_segment = response_segments[0]
+                try:
+                    audio_chunks = list(
+                        tts_model.stream_tts_sync(first_segment, options=options)
+                    )
+                    if audio_chunks:
+                        yield audio_chunks[0]
+                except Exception as fallback_error:
+                    print(f"Fallback audio generation failed: {fallback_error}")
 
     except Exception as e:
         print(f"Error in processing: {e}")
@@ -687,18 +706,25 @@ def continuous_audio_processor(audio):
         # Add error message to chat history
         chat_history.append({"role": "assistant", "content": error_msg})
 
-        # Yield error audio chunks - just use one chunk to avoid issues
+        # Generate error audio for Gradio
         try:
-            audio_chunks = list(
-                tts_model.stream_tts_sync(error_msg[:300], options=options)
-            )
-            if audio_chunks and len(audio_chunks) > 0:
-                yield audio_chunks[0]
+            error_audio = generate_complete_tts(error_msg)
+            if error_audio:
+                yield error_audio
         except Exception as audio_error:
             print(f"Error generating error audio: {audio_error}")
+            # Last resort fallback
+            try:
+                audio_chunks = list(
+                    tts_model.stream_tts_sync(error_msg[:300], options=options)
+                )
+                if audio_chunks and len(audio_chunks) > 0:
+                    yield audio_chunks[0]
+            except Exception as final_error:
+                print(f"Final fallback audio generation failed: {final_error}")
 
 
-def split_text_into_segments(text, max_length=200):
+def split_text_into_segments(text: str, max_length: int = 200) -> List[str]:
     """Split a long text into smaller segments at sentence boundaries"""
     import re
 
@@ -726,28 +752,31 @@ def split_text_into_segments(text, max_length=200):
     return segments
 
 
-def speak_introduction():
-    """Function to speak the complete introduction message"""
-    print("Speaking introduction...")
+def speak_introduction() -> Optional[Tuple[int, Any]]:
+    """Function to speak the complete introduction message through Gradio"""
+    print("Generating introduction audio for Gradio...")
     try:
-        # Use sequential TTS for the introduction
-        return generate_sequential_tts(TOASTER_INTRO)
+        # Use complete TTS for the introduction
+        return generate_complete_tts(TOASTER_INTRO)
     except Exception as e:
         print(f"Error generating introduction audio: {e}")
         # Fallback to just the first segment
         intro_segments = split_text_into_segments(TOASTER_INTRO, max_length=300)
         if intro_segments:
             first_segment = intro_segments[0]
-            intro_audio_chunks = list(
-                tts_model.stream_tts_sync(first_segment, options=options)
-            )
-            if intro_audio_chunks:
-                return intro_audio_chunks[0]
+            try:
+                intro_audio_chunks = list(
+                    tts_model.stream_tts_sync(first_segment, options=options)
+                )
+                if intro_audio_chunks:
+                    return intro_audio_chunks[0]
+            except Exception as fallback_error:
+                print(f"Fallback introduction audio failed: {fallback_error}")
     return None
 
 
 # Run the application
-def main():
+def main() -> None:
     """Main entry point for the Toaster 3000 application."""
     print(
         f"Starting Toaster 3000 voice agent with {MAX_AGENT_STEPS} reasoning steps..."
@@ -801,7 +830,7 @@ def main():
                     allow_custom_value=True,  # Allow custom model names
                 )
 
-                def update_model(value):
+                def update_model(value: str) -> str:
                     global model, code_agent
                     try:
                         # Re-initialize the model with the new model_id
@@ -839,7 +868,7 @@ def main():
                     info="Higher values make the toaster think more deeply before responding",
                 )
 
-                def update_steps(value):
+                def update_steps(value: int) -> str:
                     global MAX_AGENT_STEPS
                     MAX_AGENT_STEPS = int(value)
                     print(f"Updated MAX_AGENT_STEPS to {MAX_AGENT_STEPS}")
@@ -871,7 +900,7 @@ def main():
                 # Add Clear Chat button
                 clear_button = gr.Button("Clear Chat")
 
-                def clear_and_reset():
+                def clear_and_reset() -> str:
                     global chat_history
                     chat_history = [{"role": "assistant", "content": TOASTER_INTRO}]
                     return format_chat_history(chat_history)
@@ -919,11 +948,11 @@ def main():
                     gr.Markdown("### Push to Talk:")
 
                     push_to_talk = gr.Audio(
-                        sources=["microphone"],  # Updated from 'source' to 'sources'
+                        sources=["microphone"],
                         type="numpy",
                         label="Push to Talk",
-                        streaming=False,  # Not streaming for push-to-talk
-                        elem_classes="push-to-talk-input",
+                        streaming=False,
+                        elem_classes=["push-to-talk-input"],
                     )
 
                     # Audio output for push-to-talk responses
@@ -965,9 +994,27 @@ def main():
 
                     # Continuous listening components (hidden by default)
                     with gr.Column(visible=False) as continuous_components:
-                        # Initialize the pause detector with the FIXED continuous processor
-                        pause_detector = ReplyOnPause(continuous_audio_processor)
-                        pause_detector.pause_threshold = 1.5
+                        # Initialize the pause detector with proper configuration
+                        from fastrtc import AlgoOptions, SileroVadOptions
+
+                        # Configure pause detection options
+                        algo_options = AlgoOptions(
+                            audio_chunk_duration=0.6,
+                            started_talking_threshold=0.2,
+                            speech_threshold=0.1,
+                        )
+
+                        model_options = SileroVadOptions(
+                            threshold=0.5,
+                            min_speech_duration_ms=250,
+                            min_silence_duration_ms=100,
+                        )
+
+                        pause_detector = ReplyOnPause(
+                            continuous_audio_processor,
+                            algo_options=algo_options,
+                            model_options=model_options,
+                        )
 
                         # Create the stream with configured pause detector
                         stream = Stream(
