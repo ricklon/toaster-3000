@@ -2,7 +2,7 @@
 
 import io
 from threading import Lock
-from typing import Any, List, Optional, Tuple, cast
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -63,18 +63,32 @@ class TTSService:
 
             except Exception as e:
                 print(f"Error generating TTS: {e}")
-                # Fallback to first segment
+                # Fallback: try all segments individually
                 try:
-                    first_segment = self._split_text_into_segments(
+                    fallback_segments = self._split_text_into_segments(
                         text, max_length=300
-                    )[0]
-                    audio_chunks = list(
-                        self._model.stream_tts_sync(
-                            first_segment, options=self._options
-                        )
                     )
-                    if audio_chunks:
-                        return cast(Tuple[int, Any], audio_chunks[0])
+                    fallback_audio = []
+                    fallback_rate = None
+
+                    for seg in fallback_segments:
+                        chunks = list(
+                            self._model.stream_tts_sync(seg, options=self._options)
+                        )
+                        if chunks:
+                            chunk_data = chunks[0]
+                            if isinstance(chunk_data, tuple):
+                                rate, audio = chunk_data
+                                if fallback_rate is None:
+                                    fallback_rate = rate
+                                fallback_audio.append(
+                                    audio
+                                    if hasattr(audio, "shape")
+                                    else np.array(audio)
+                                )
+
+                    if fallback_audio and fallback_rate:
+                        return (fallback_rate, np.concatenate(fallback_audio))
                 except Exception as fallback_error:
                     print(f"Fallback TTS also failed: {fallback_error}")
 

@@ -2,20 +2,32 @@
 
 import gradio as gr
 
-# Create the theme for Toaster 3000 using built-in colors
+# Create the theme for Toaster 3000 - dark mode optimized
 toaster_theme = gr.themes.Soft(
     primary_hue="orange",  # Toast color
-    secondary_hue="yellow",  # Warm bread color
-    neutral_hue="gray",  # Metallic toaster
+    secondary_hue="amber",  # Warm bread color
+    neutral_hue="slate",  # Metallic toaster
+).set(
+    body_background_fill="#1a1a2e",
+    body_background_fill_dark="#1a1a2e",
+    block_background_fill="#16213e",
+    block_background_fill_dark="#16213e",
+    block_title_background_fill="#0f3460",
+    block_title_background_fill_dark="#0f3460",
+    block_label_background_fill="#e94560",
+    block_label_background_fill_dark="#e94560",
+    block_label_text_color="#ffffff",
+    block_label_text_color_dark="#ffffff",
 )
 
-# Custom CSS for toaster theme - updated for Gradio 5.x with mobile responsiveness
+# Custom CSS for toaster dark theme - optimized for Gradio 5.x
 toaster_css = """
-/* Base container with responsive background */
+/* Dark theme base container */
 .gradio-container {
-    background-image: linear-gradient(to bottom right, #FFA07A, #FFE4B5);
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     padding: 10px;
     min-height: 100vh;
+    color: #e0e0e0;
 }
 
 /* Mobile-first responsive design */
@@ -67,9 +79,10 @@ toaster_css = """
     max-height: 50vh;
     overflow-y: auto;
     border-radius: 10px;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(22, 33, 62, 0.9);
     padding: 10px;
     margin-top: 15px;
+    border: 1px solid #0f3460;
 }
 
 @media (max-width: 768px) {
@@ -81,16 +94,18 @@ toaster_css = """
 }
 
 .chat-container {
-    background-color: rgba(255, 255, 255, 0.8) !important;
+    background-color: rgba(22, 33, 62, 0.9) !important;
     border-radius: 10px !important;
     padding: 10px !important;
     margin-top: 15px !important;
     max-height: 300px !important;
     overflow-y: auto !important;
+    color: #e0e0e0 !important;
 }
 
 .user-message {
-    background-color: #E8F4FA !important;
+    background-color: #1a3a5c !important;
+    color: #e0e0e0 !important;
     padding: 8px !important;
     border-radius: 10px !important;
     margin-bottom: 8px !important;
@@ -99,11 +114,22 @@ toaster_css = """
 }
 
 .bot-message {
-    background-color: #FFF3E0 !important;
+    background-color: #2a1a3e !important;
+    color: #e0e0e0 !important;
     padding: 8px !important;
     border-radius: 10px !important;
     margin-bottom: 8px !important;
-    border-left: 4px solid #FF6B35 !important;
+    border-left: 4px solid #e94560 !important;
+    word-wrap: break-word !important;
+}
+
+.bot-message {
+    background-color: #2a1a3e !important;
+    color: #e0e0e0 !important;
+    padding: 8px !important;
+    border-radius: 10px !important;
+    margin-bottom: 8px !important;
+    border-left: 4px solid #e94560 !important;
     word-wrap: break-word !important;
 }
 
@@ -138,7 +164,8 @@ toaster_css = """
 
 .gr-form {
     border-radius: 10px !important;
-    background-color: rgba(255, 255, 255, 0.6) !important;
+    background-color: rgba(22, 33, 62, 0.8) !important;
+    color: #e0e0e0 !important;
 }
 
 /* Responsive audio components */
@@ -196,11 +223,12 @@ toaster_css = """
 
 /* Responsive input sections */
 .input-section {
-    background-color: rgba(255, 255, 255, 0.6) !important;
+    background-color: rgba(22, 33, 62, 0.8) !important;
     border-radius: 10px !important;
     padding: 15px !important;
     margin-top: 15px !important;
     width: 100% !important;
+    color: #e0e0e0 !important;
 }
 
 @media (max-width: 768px) {
@@ -211,11 +239,12 @@ toaster_css = """
 }
 
 .toaster-intro {
-    background-color: #FFF3E0 !important;
+    background-color: #16213e !important;
+    color: #e0e0e0 !important;
     padding: 15px !important;
     border-radius: 10px !important;
     margin-bottom: 15px !important;
-    border-left: 4px solid #FF6B35 !important;
+    border-left: 4px solid #e94560 !important;
     font-size: clamp(1rem, 2.5vw, 1.1rem) !important;
     line-height: 1.4 !important;
 }
