@@ -2,18 +2,18 @@
 Toaster 3000 UI Test Runner using Playwright MCP
 This script uses the available Playwright MCP tools to test the UI.
 """
-import asyncio
-import time
-import subprocess
+
 import os
+import subprocess
 import sys
-from typing import Optional
+import time
+from typing import Any, Dict, Optional
 
 
 class PlaywrightUITestRunner:
     """Test runner that uses Playwright MCP to test the Toaster 3000 UI"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.app_process: Optional[subprocess.Popen] = None
         self.app_url = "http://127.0.0.1:7860"
 
@@ -23,13 +23,13 @@ class PlaywrightUITestRunner:
             print("🍞 Starting Toaster 3000 application...")
 
             # Start the app in a separate process
-            cmd = ["uv", "run", "python", "src/toaster_3000/toaster_3000.py"]
+            cmd = ["uv", "run", "toaster"]
             self.app_process = subprocess.Popen(
                 cmd,
                 cwd=os.getcwd(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
             )
 
             # Give the app time to start
@@ -42,14 +42,17 @@ class PlaywrightUITestRunner:
                 return True
             else:
                 stdout, stderr = self.app_process.communicate()
-                print(f"❌ App failed to start. stdout: {stdout[:500]}, stderr: {stderr[:500]}")
+                print(
+                    f"❌ App failed to start. "
+                    f"stdout: {stdout[:500]}, stderr: {stderr[:500]}"
+                )
                 return False
 
         except Exception as e:
             print(f"❌ Error starting app: {str(e)}")
             return False
 
-    def stop_app(self):
+    def stop_app(self) -> None:
         """Stop the application"""
         if self.app_process:
             print("🛑 Stopping Toaster 3000 application...")
@@ -60,16 +63,16 @@ class PlaywrightUITestRunner:
                 self.app_process.kill()
             self.app_process = None
 
-    def run_basic_ui_tests(self) -> dict:
+    def run_basic_ui_tests(self) -> Dict[str, Any]:
         """
         Run basic UI tests using the available tools.
         Since we're in Claude Code, we'll use the available MCP tools.
         """
-        test_results = {
+        test_results: Dict[str, Any] = {
             "total_tests": 0,
             "passed": 0,
             "failed": 0,
-            "details": []
+            "details": [],
         }
 
         print("🧪 Starting UI Tests for Toaster 3000...")
@@ -138,7 +141,7 @@ class PlaywrightUITestRunner:
 
         return test_results
 
-    def generate_test_report(self, results: dict):
+    def generate_test_report(self, results: Dict[str, Any]) -> None:
         """Generate a test report"""
         print("\n" + "=" * 50)
         print("🍞 TOASTER 3000 UI TEST REPORT")
@@ -153,13 +156,14 @@ class PlaywrightUITestRunner:
         print("=" * 50)
 
 
-def run_ui_test_instructions():
+def run_ui_test_instructions() -> None:
     """
     Print instructions for running UI tests with Playwright MCP
     """
     print("🍞 Toaster 3000 UI Testing with Playwright MCP")
     print("=" * 50)
-    print("""
+    print(
+        """
 To run comprehensive UI tests with Playwright MCP, you can use the following approach:
 
 1. Start the Toaster 3000 application:
@@ -205,10 +209,14 @@ To run comprehensive UI tests with Playwright MCP, you can use the following app
    - Test audio component visibility
 
 Example Playwright MCP usage in Claude Code:
-"Navigate to http://127.0.0.1:7860 and test that the Toaster 3000 interface loads properly, then interact with the text input to send a message about toasting bread."
+"Navigate to http://127.0.0.1:7860 and test that the Toaster 3000
+interface loads properly, then interact with the text input to send
+a message about toasting bread."
 
-Note: Make sure your .env file has a valid HUGGINGFACE_API_KEY for full functionality testing.
-""")
+Note: Make sure your .env file has a valid HUGGINGFACE_API_KEY for
+full functionality testing.
+"""
+    )
 
 
 if __name__ == "__main__":

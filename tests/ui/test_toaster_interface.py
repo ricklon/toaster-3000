@@ -2,19 +2,20 @@
 Toaster 3000 UI Test Suite
 Tests the user interface experience using Playwright MCP.
 """
-import pytest
-import time
-import tempfile
+
 import os
-from typing import Dict, Any, Optional
 import subprocess
-import threading
+import time
+import typing
+from typing import Optional
+
+import pytest
 
 
 class ToasterUITester:
     """Test class for Toaster 3000 UI using Playwright MCP"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.app_process: Optional[subprocess.Popen] = None
         self.app_url: Optional[str] = None
         self.is_app_running = False
@@ -23,13 +24,13 @@ class ToasterUITester:
         """Start the Toaster 3000 application and return the URL"""
         try:
             # Start the application in a separate process
-            cmd = ["uv", "run", "python", "src/toaster_3000/toaster_3000.py"]
+            cmd = ["uv", "run", "toaster"]
             self.app_process = subprocess.Popen(
                 cmd,
                 cwd=os.getcwd(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
             )
 
             # Wait for the app to start and capture the URL
@@ -41,12 +42,15 @@ class ToasterUITester:
                 if self.app_process.poll() is not None:
                     # Process has terminated
                     stdout, stderr = self.app_process.communicate()
-                    raise RuntimeError(f"App failed to start. stdout: {stdout}, stderr: {stderr}")
+                    raise RuntimeError(
+                        f"App failed to start. stdout: {stdout}, stderr: {stderr}"
+                    )
 
                 time.sleep(1)
 
                 # Check if we can find the Gradio URL in the output
-                # This is a simplified approach - in reality, we'd need to parse the output
+                # This is a simplified approach - in reality,
+                # we'd need to parse the output
                 # For now, we'll assume the default Gradio URL
                 self.app_url = "http://127.0.0.1:7860"
                 self.is_app_running = True
@@ -55,7 +59,9 @@ class ToasterUITester:
         except Exception as e:
             raise RuntimeError(f"Failed to start Toaster 3000 app: {str(e)}")
 
-    def stop_toaster_app(self):
+        raise RuntimeError("App failed to start within timeout")
+
+    def stop_toaster_app(self) -> None:
         """Stop the Toaster 3000 application"""
         if self.app_process:
             self.app_process.terminate()
@@ -69,7 +75,7 @@ class ToasterUITester:
 
 
 @pytest.fixture
-def toaster_app():
+def toaster_app() -> typing.Generator[ToasterUITester, None, None]:
     """Fixture to start and stop the Toaster 3000 app for testing"""
     tester = ToasterUITester()
 
@@ -91,7 +97,7 @@ def toaster_app():
 class TestToasterInterface:
     """Test cases for the Toaster 3000 user interface"""
 
-    def test_page_loads_successfully(self, toaster_app: ToasterUITester):
+    def test_page_loads_successfully(self, toaster_app: ToasterUITester) -> None:
         """Test that the main page loads without errors"""
         # This test would use Playwright MCP to navigate to the page
         # and verify it loads successfully
@@ -104,7 +110,7 @@ class TestToasterInterface:
         # 2. Wait for page load
         # 3. Verify page title contains "Toaster 3000"
 
-    def test_toaster_title_display(self, toaster_app: ToasterUITester):
+    def test_toaster_title_display(self, toaster_app: ToasterUITester) -> None:
         """Test that the Toaster 3000 title is properly displayed"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -113,7 +119,7 @@ class TestToasterInterface:
         # 4. Verify the toaster icon (🍞) is present
         pass
 
-    def test_introduction_message_visible(self, toaster_app: ToasterUITester):
+    def test_introduction_message_visible(self, toaster_app: ToasterUITester) -> None:
         """Test that the introduction message is visible on page load"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -122,7 +128,7 @@ class TestToasterInterface:
         # 4. Verify the introduction audio component is present
         pass
 
-    def test_text_input_functionality(self, toaster_app: ToasterUITester):
+    def test_text_input_functionality(self, toaster_app: ToasterUITester) -> None:
         """Test text input and response functionality"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -133,7 +139,7 @@ class TestToasterInterface:
         # 6. Verify response contains toaster-themed content
         pass
 
-    def test_conversation_display_updates(self, toaster_app: ToasterUITester):
+    def test_conversation_display_updates(self, toaster_app: ToasterUITester) -> None:
         """Test that the conversation display updates correctly"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -143,7 +149,7 @@ class TestToasterInterface:
         # 5. Verify messages have correct styling (user-message, bot-message classes)
         pass
 
-    def test_audio_components_present(self, toaster_app: ToasterUITester):
+    def test_audio_components_present(self, toaster_app: ToasterUITester) -> None:
         """Test that audio input/output components are present"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -152,7 +158,7 @@ class TestToasterInterface:
         # 4. Verify continuous listening toggle exists
         pass
 
-    def test_model_selection_dropdown(self, toaster_app: ToasterUITester):
+    def test_model_selection_dropdown(self, toaster_app: ToasterUITester) -> None:
         """Test model selection functionality"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -163,7 +169,7 @@ class TestToasterInterface:
         # 6. Verify status message appears
         pass
 
-    def test_intelligence_level_slider(self, toaster_app: ToasterUITester):
+    def test_intelligence_level_slider(self, toaster_app: ToasterUITester) -> None:
         """Test the intelligence level (reasoning steps) slider"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -173,7 +179,7 @@ class TestToasterInterface:
         # 5. Verify status message confirms the change
         pass
 
-    def test_clear_chat_functionality(self, toaster_app: ToasterUITester):
+    def test_clear_chat_functionality(self, toaster_app: ToasterUITester) -> None:
         """Test the clear chat button functionality"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -182,7 +188,7 @@ class TestToasterInterface:
         # 4. Verify conversation display resets to just the intro message
         pass
 
-    def test_responsive_design_mobile(self, toaster_app: ToasterUITester):
+    def test_responsive_design_mobile(self, toaster_app: ToasterUITester) -> None:
         """Test responsive design on mobile viewport"""
         # This would use Playwright MCP to:
         # 1. Set viewport to mobile size (e.g., 375x667)
@@ -192,7 +198,7 @@ class TestToasterInterface:
         # 5. Verify text remains readable
         pass
 
-    def test_css_theming_applied(self, toaster_app: ToasterUITester):
+    def test_css_theming_applied(self, toaster_app: ToasterUITester) -> None:
         """Test that custom CSS theming is properly applied"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -202,7 +208,7 @@ class TestToasterInterface:
         # 5. Verify chat message styling
         pass
 
-    def test_accessibility_features(self, toaster_app: ToasterUITester):
+    def test_accessibility_features(self, toaster_app: ToasterUITester) -> None:
         """Test accessibility features of the interface"""
         # This would use Playwright MCP to:
         # 1. Navigate to the page
@@ -212,7 +218,7 @@ class TestToasterInterface:
         # 5. Verify audio components have proper labels
         pass
 
-    def test_error_handling_display(self, toaster_app: ToasterUITester):
+    def test_error_handling_display(self, toaster_app: ToasterUITester) -> None:
         """Test error message display in the UI"""
         # This would test error scenarios like:
         # 1. Network connection issues
@@ -225,7 +231,9 @@ class TestToasterInterface:
 class TestToasterWorkflow:
     """End-to-end workflow tests for typical user scenarios"""
 
-    def test_complete_text_conversation_workflow(self, toaster_app: ToasterUITester):
+    def test_complete_text_conversation_workflow(
+        self, toaster_app: ToasterUITester
+    ) -> None:
         """Test a complete conversation workflow using text input"""
         # This would simulate a full conversation:
         # 1. User types a question about toasting
@@ -235,7 +243,7 @@ class TestToasterWorkflow:
         # 5. Verify toaster personality comes through
         pass
 
-    def test_audio_conversation_workflow(self, toaster_app: ToasterUITester):
+    def test_audio_conversation_workflow(self, toaster_app: ToasterUITester) -> None:
         """Test audio input/output workflow (if audio testing is possible)"""
         # This would test:
         # 1. Push-to-talk functionality
@@ -244,7 +252,7 @@ class TestToasterWorkflow:
         # Note: Audio testing might need special setup
         pass
 
-    def test_model_switching_workflow(self, toaster_app: ToasterUITester):
+    def test_model_switching_workflow(self, toaster_app: ToasterUITester) -> None:
         """Test switching between different AI models"""
         # This would test:
         # 1. Start with default model

@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Rick Anderson", email = "rick.rickanderson@gmail.com" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "fastrtc",
     "smolagents",
@@ -17,6 +17,7 @@ dependencies = [
     "sounddevice",
     "soundfile",
     "hf-xet>=1.1.10",
+    "kokoro-onnx>=0.5.0",
 ]
 
 [project.optional-dependencies]
@@ -35,12 +36,17 @@ ui-testing = [
 ]
 
 [project.scripts]
-toaster = "toaster_3000.toaster_3000:main"
+toaster = "toaster_3000.main:main"
 test-ui = "test_ui_demo:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+override-dependencies = [
+    "av>=17.0.0",
+]
 
 [tool.black]
 line-length = 88
@@ -55,8 +61,8 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=src/toaster_3000 --cov-report=term-missing"
