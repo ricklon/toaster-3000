@@ -191,11 +191,17 @@ See `pyproject.toml` for complete dependency list.
 | `GRADIO_SHARE` | ❌ | `false` | Set to `true` to request a public Gradio share URL |
 
 ### Model Options
-The application supports various HuggingFace models:
-- `meta-llama/Llama-3.3-70B-Instruct` (default)
-- `Qwen/Qwen2.5-Coder-32B-Instruct`
-- `microsoft/DialoGPT-large`
-- Any model compatible with the HuggingFace Inference API
+The application uses tool-capable models via the HuggingFace Inference API
+(smolagents `CodeAgent`). Latest recommended models:
+- `Qwen/Qwen3-Coder-Next` (default — latest code-specialized model)
+- `Qwen/Qwen3-14B`
+- `google/gemma-4-31B-it`
+- `google/gemma-4-26B-A4B-it` (MoE, efficient)
+- `mistralai/Mistral-Small-4-119B-2603`
+- `mistralai/Devstral-Small-2-24B-Instruct-2512`
+- `meta-llama/Llama-3.3-70B-Instruct`
+
+Models switch live at runtime — no restart required.
 
 ### Audio Settings
 - **TTS Voice**: `am_liam` (Kokoro TTS)

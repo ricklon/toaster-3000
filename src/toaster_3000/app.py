@@ -1,6 +1,6 @@
 """Gradio application for Toaster 3000."""
 
-from typing import Any, Optional, Tuple
+from typing import Any, Generator, Optional, Tuple
 
 import gradio as gr
 
@@ -23,6 +23,87 @@ class ToasterApp:
         self.config = config
         self.runtime = ToasterRuntime(config)
         self.session_manager = SessionManager(self.runtime)
+
+    def _create_continuous_handler(self) -> Any:
+        """Create a fastrtc ReplyOnPause handler for continuous listening.
+
+        Returns:
+            A callable that processes audio and yields TTS chunks.
+        """
+        from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions
+
+        def continuous_audio_processor(
+            audio: Tuple[int, Any],
+        ) -> Generator[Tuple[int, Any], None, None]:
+            """Process audio via STT → Agent → TTS pipeline.
+
+            Args:
+                audio: Tuple of (sample_rate, audio_data)
+
+            Yields:
+                Audio chunks from TTS response.
+            """
+            import io
+
+            import soundfile as sf
+
+            try:
+                sample_rate, audio_data = audio
+
+                # Convert numpy array to WAV bytes
+                audio_bytes = io.BytesIO()
+                sf.write(audio_bytes, audio_data.T, sample_rate, format="wav")
+                audio_bytes.seek(0)
+
+                # STT via Whisper
+                user_text = self.runtime.stt_service.transcribe(
+                    (sample_rate, audio_data)
+                )
+
+                if not user_text.strip():
+                    user_text = (
+                        "I couldn't hear that clearly. "
+                        "Could you please repeat? "
+                        "Perhaps ask me about toasting?"
+                    )
+
+                # Get agent response
+                # Create a temporary session for the stream context
+                from toaster_3000.session import ToasterSession
+
+                temp_session = ToasterSession("stream", self.runtime)
+                html_response, tts_audio = temp_session.process_text_input(user_text)
+
+                if tts_audio is not None:
+                    yield tts_audio
+
+            except Exception as e:
+                print(f"Continuous audio processor error: {e}")
+                error_msg = (
+                    f"Oh crumbs! Error: {str(e)[:80]}... "
+                    f"Shall we talk about bread instead?"
+                )
+                error_audio = self.runtime.tts_service.generate_audio(error_msg)
+                if error_audio:
+                    yield error_audio
+
+        algo_options = AlgoOptions(
+            audio_chunk_duration=0.6,
+            started_talking_threshold=0.2,
+            speech_threshold=0.1,
+        )
+
+        model_options = SileroVadOptions(
+            threshold=0.5,
+            min_speech_duration_ms=250,
+            min_silence_duration_ms=100,
+        )
+
+        return ReplyOnPause(
+            continuous_audio_processor,
+            algo_options=algo_options,
+            model_options=model_options,
+        )
 
     def create_ui(self) -> gr.Blocks:
         """Create Gradio interface with session management.
@@ -200,15 +281,20 @@ class ToasterApp:
             with gr.Row():
                 model_dropdown = gr.Dropdown(
                     choices=[
-                        "gpt2",
-                        "facebook/opt-125m",
-                        "EleutherAI/pythia-70m",
+                        "Qwen/Qwen3-Coder-Next",
+                        "Qwen/Qwen3-14B",
+                        "google/gemma-4-31B-it",
+                        "google/gemma-4-26B-A4B-it",
+                        "mistralai/Mistral-Small-4-119B-2603",
+                        "mistralai/Devstral-Small-2-24B-Instruct-2512",
                         "meta-llama/Llama-3.3-70B-Instruct",
-                        "Qwen/Qwen2.5-Coder-1.5B-Instruct",
                     ],
                     value=self.config.model_id,
                     label="Select Model",
-                    info="Choose a different model (requires restart to apply)",
+                    info=(
+                        "Latest tool-capable models via HuggingFace API — "
+                        "switches live, no restart needed"
+                    ),
                     allow_custom_value=True,
                 )
                 model_button = gr.Button("Change Model")
@@ -319,6 +405,38 @@ class ToasterApp:
                         3. Stop recording when finished
                         4. Toaster 3000 will respond
                         """
+                    )
+
+            # Continuous listening section (fastrtc Stream)
+            with gr.Row():
+                with gr.Column(elem_classes="input-section"):
+                    gr.Markdown("### Continuous Listening:")
+
+                    continuous_toggle = gr.Checkbox(
+                        label="Enable Continuous Listening",
+                        value=False,
+                        info=(
+                            "When enabled, Toaster 3000 listens continuously "
+                            "and responds after you pause speaking"
+                        ),
+                    )
+
+                    with gr.Column(visible=False) as continuous_components:
+                        pause_detector = self._create_continuous_handler()
+
+                        from fastrtc import Stream
+
+                        stream = Stream(
+                            pause_detector,
+                            modality="audio",
+                            mode="send-receive",
+                        )
+                        stream.ui.render()
+
+                    continuous_toggle.change(
+                        lambda x: gr.update(visible=x),
+                        inputs=continuous_toggle,
+                        outputs=continuous_components,
                     )
 
             # Footer
