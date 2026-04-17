@@ -117,6 +117,10 @@ class ToasterRuntime:
 
         return f"Toaster brain upgraded to {model_id}!"
 
+    def switch_tts_voice(self, voice: str) -> str:
+        """Switch the TTS voice at runtime."""
+        return self.tts_service.switch_voice(voice)
+
     @classmethod
     def reset(cls) -> None:
         """Reset singleton (for testing only).

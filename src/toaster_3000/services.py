@@ -55,6 +55,20 @@ class TTSService:
         self._options = options
         self._lock = Lock()
 
+    def switch_voice(self, voice: str) -> str:
+        """Switch TTS voice at runtime (thread-safe)."""
+        try:
+            from fastrtc import KokoroTTSOptions
+            with self._lock:
+                self._options = KokoroTTSOptions(
+                    voice=voice,
+                    speed=self._options.speed,
+                    lang=self._options.lang,
+                )
+            return f"Voice switched to {voice}!"
+        except Exception as e:
+            return f"Failed to switch voice: {e}"
+
     def generate_audio(self, text: str) -> Optional[Tuple[int, Any]]:
         """Generate complete audio for text (thread-safe).
 

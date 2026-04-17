@@ -1,5 +1,6 @@
 """Gradio application for Toaster 3000."""
 
+import html
 from threading import Lock
 from typing import Any, Dict, Generator, Optional, Tuple
 
@@ -94,12 +95,8 @@ class ToasterApp:
                     (sample_rate, audio_data)
                 )
 
-                if not user_text.strip():
-                    user_text = (
-                        "I couldn't hear that clearly. "
-                        "Could you please repeat? "
-                        "Perhaps ask me about toasting?"
-                    )
+                if not user_text or len(user_text.split()) < 2:
+                    return
 
                 if session is not None:
                     response_text = session.get_response_text(user_text)
@@ -227,12 +224,23 @@ class ToasterApp:
             """Generate introduction audio."""
             return self.runtime.tts_service.generate_audio(TOASTER_INTRO)
 
-        def get_conversation_display(session_id: str) -> str:
-            """Return the current conversation display for a session."""
+        def get_talk_tab_updates(session_id: str) -> Tuple[str, str]:
+            """Return (conversation_html, idle_warning_html) for the Talk tab timer."""
+            import time as _time
             session = self.session_manager.get_session(session_id)
             if session is None:
-                return "<div class='error'>Error: Session expired</div>"
-            return session.chat_history.format_html()
+                return "<div class='error'>Error: Session expired</div>", ""
+            idle = _time.time() - session.last_active
+            if idle > 240:
+                mins = int(idle // 60)
+                warning = (
+                    f"<div class='idle-warning'>"
+                    f"⏰ You've been away for {mins} min — your session resets at 5 min of inactivity."
+                    f"</div>"
+                )
+            else:
+                warning = ""
+            return session.chat_history.format_html(extra_html=session._countdown_html), warning
 
         def get_session_info(session_id: str) -> str:
             """Get session diagnostics."""
@@ -276,40 +284,54 @@ class ToasterApp:
             return msg, get_recipes_display()
 
         def get_tool_management_info(session_id: str) -> str:
-            """List custom tools and recent registration decisions."""
+            """Risk policy text for the settings panel."""
+            return f"#### Risk Policy\n\n{TOOL_RISK_POLICY_TEXT}"
+
+        def get_tool_gallery(session_id: str) -> Tuple[str, list]:
+            """Return (gallery_html, tool_name_choices) for the tool gallery."""
             if not session_id:
-                return "No active session."
+                return "<p><em>No active session.</em></p>", []
+            session = self.session_manager.get_session(session_id)
+            if session is None:
+                return "<p><em>Session expired.</em></p>", []
+            tools = session.get_custom_tools()
+            if not tools:
+                return (
+                    "<p class='tool-gallery-empty'>No custom tools yet. "
+                    "Ask the Toaster to write a toast calculator, then register it!</p>",
+                    [],
+                )
+            cards = "<div class='tool-gallery'>"
+            for t in tools:
+                cards += (
+                    f"<div class='tool-card'>"
+                    f"<strong class='tool-card-name'>{html.escape(t['name'])}</strong>"
+                    f"<p class='tool-card-desc'>{html.escape(t['description'])}</p>"
+                    f"</div>"
+                )
+            cards += "</div>"
+            return cards, [t["name"] for t in tools]
+
+        def invoke_custom_tool(session_id: str, tool_name: str, args_json: str) -> str:
+            """Invoke a registered custom tool by name with JSON args."""
+            import json
+            if not session_id or not tool_name:
+                return "Select a tool first."
             session = self.session_manager.get_session(session_id)
             if session is None:
                 return "Session expired."
-
-            parts = [
-                "#### Risk Policy",
-                TOOL_RISK_POLICY_TEXT,
-                "#### Active Custom Tools",
-            ]
-            tools = session.get_custom_tools()
-            if not tools:
-                parts.append(
-                    "_No custom tools yet._ Ask the Toaster to write a pure "
-                    "toast calculator, then register it as a tool."
-                )
-            else:
-                parts.extend(f"- **{t['name']}** — {t['description']}" for t in tools)
-
-            parts.append("\n#### Recent Tool Requests")
-            audit_entries = session.get_tool_audit_entries(limit=10)
-            if not audit_entries:
-                parts.append("_No tool registration requests logged yet._")
-            else:
-                for entry in audit_entries:
-                    reason = "; ".join(entry["reasons"]) or "sandbox-approved"
-                    parts.append(
-                        f"- **{entry['tool_name']}** — risk `{entry['risk_level']}`, "
-                        f"outcome `{entry['outcome']}`. {reason}"
-                    )
-
-            return "\n\n".join(parts)
+            tool = next((t for t in session._custom_tools if t.name == tool_name), None)
+            if tool is None:
+                return f"Tool '{tool_name}' not found."
+            try:
+                kwargs = json.loads(args_json) if args_json.strip() else {}
+            except json.JSONDecodeError as e:
+                return f"Invalid JSON: {e}"
+            try:
+                result = tool(**kwargs)
+                return str(result)
+            except Exception as e:
+                return f"Error: {e}"
 
         # Build the UI
         with gr.Blocks(theme=toaster_theme, css=toaster_css) as app:
@@ -374,22 +396,54 @@ class ToasterApp:
                         elem_id="conversation-display",
                         show_label=False,
                     )
+                    idle_warning = gr.HTML(value="", elem_id="idle-warning")
 
                     # Poll every 2 s so voice turns appear in the chat display.
                     voice_timer = gr.Timer(value=2)
                     voice_timer.tick(
-                        get_conversation_display,
+                        get_talk_tab_updates,
                         inputs=[session_state],
-                        outputs=[conversation_display],
+                        outputs=[conversation_display, idle_warning],
                     )
 
-                    clear_button = gr.Button(
-                        "Reset Conversation", size="sm", variant="secondary"
-                    )
+                    with gr.Row():
+                        clear_button = gr.Button(
+                            "Reset Conversation", size="sm", variant="secondary"
+                        )
+                        download_btn = gr.DownloadButton(
+                            "⬇️ Download Chat", size="sm", variant="secondary"
+                        )
                     clear_button.click(
                         clear_chat,
                         inputs=[session_state],
                         outputs=[conversation_display],
+                    )
+
+                    def generate_chat_export(session_id: str) -> Optional[str]:
+                        import tempfile
+                        from datetime import datetime
+                        session = self.session_manager.get_session(session_id)
+                        if session is None:
+                            return None
+                        msgs = session.chat_history.get_all()
+                        lines = [
+                            "# Toaster 3000 Conversation\n",
+                            f"_Exported {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n\n---\n",
+                        ]
+                        for m in msgs:
+                            sender = "You" if m["role"] == "user" else "Toaster 3000"
+                            lines.append(f"**{sender}:** {m['content']}\n\n")
+                        content = "\n".join(lines)
+                        fd, path = tempfile.mkstemp(suffix=".md", prefix="toaster_chat_")
+                        import os
+                        with os.fdopen(fd, "w") as f:
+                            f.write(content)
+                        return path
+
+                    download_btn.click(
+                        generate_chat_export,
+                        inputs=[session_state],
+                        outputs=[download_btn],
                     )
 
                 # ─── RECIPES TAB ───
@@ -612,26 +666,80 @@ class ToasterApp:
 
                             gr.Markdown("#### Tool Management")
                             gr.Markdown(
-                                "_Transparent record of custom tools the Toaster tries to register._",
+                                "_Tools the Toaster writes and registers during your session._",
                                 elem_classes=["gr-markdown"],
                             )
                             custom_tools_display = gr.Markdown(
-                                f"#### Risk Policy\n\n{TOOL_RISK_POLICY_TEXT}\n\n"
-                                "#### Active Custom Tools\n\n"
-                                "_No custom tools yet._\n\n"
-                                "#### Recent Tool Requests\n\n"
-                                "_No tool registration requests logged yet._"
+                                get_tool_management_info(""),
                             )
-                            tools_refresh_btn = gr.Button("Refresh Tools", size="sm")
+                            tool_gallery = gr.HTML(
+                                "<p class='tool-gallery-empty'>No custom tools yet.</p>",
+                                label="Active Tools",
+                                show_label=True,
+                            )
+                            tools_refresh_btn = gr.Button("🔄 Refresh Tools", size="sm")
+
+                            gr.Markdown("##### Quick Invoke")
+                            with gr.Row():
+                                tool_invoke_select = gr.Dropdown(
+                                    choices=[],
+                                    label="Tool",
+                                    scale=1,
+                                    interactive=True,
+                                )
+                                tool_invoke_args = gr.Textbox(
+                                    label="Arguments (JSON)",
+                                    placeholder='{"param": "value"}',
+                                    scale=2,
+                                )
+                            tool_invoke_btn = gr.Button("Run Tool", size="sm")
+                            tool_invoke_output = gr.Markdown("")
+
+                            def refresh_tools(session_id):
+                                gallery_html, choices = get_tool_gallery(session_id)
+                                return (
+                                    get_tool_management_info(session_id),
+                                    gallery_html,
+                                    gr.update(choices=choices),
+                                )
+
                             tools_refresh_btn.click(
-                                get_tool_management_info,
+                                refresh_tools,
                                 inputs=[session_state],
-                                outputs=[custom_tools_display],
+                                outputs=[custom_tools_display, tool_gallery, tool_invoke_select],
+                            )
+                            tool_invoke_btn.click(
+                                invoke_custom_tool,
+                                inputs=[session_state, tool_invoke_select, tool_invoke_args],
+                                outputs=[tool_invoke_output],
                             )
 
                             gr.Markdown("---")
 
                             gr.Markdown("#### Audio")
+                            voice_dropdown = gr.Dropdown(
+                                choices=[
+                                    ("Liam (US Male)", "am_liam"),
+                                    ("Heart (US Female)", "af_heart"),
+                                    ("Emma (UK Female)", "bf_emma"),
+                                    ("Nicole (US Female)", "af_nicole"),
+                                    ("Michael (US Male)", "am_michael"),
+                                    ("Bella (US Female)", "af_bella"),
+                                ],
+                                value=self.runtime.config.tts_voice,
+                                label="TTS Voice",
+                                info="Switch voice — takes effect on the next response",
+                            )
+                            voice_btn = gr.Button("Apply Voice", size="sm")
+                            voice_status = gr.Textbox(
+                                label="", show_label=False, interactive=False
+                            )
+                            voice_btn.click(
+                                lambda v: self.runtime.switch_tts_voice(v),
+                                inputs=[voice_dropdown],
+                                outputs=[voice_status],
+                            )
+                            gr.Markdown("---")
                             intro_btn = gr.Button("🔊 Play Intro", size="sm")
                             intro_audio = gr.Audio(
                                 label=None,
@@ -644,6 +752,50 @@ class ToasterApp:
                                 outputs=[intro_audio],
                             )
 
+                # ─── AUDIT TAB ───
+                with gr.Tab("🔍 Audit"):
+                    gr.Markdown("### Tool Registration Audit Log")
+                    gr.Markdown(
+                        "_Every dynamic tool request is logged here — approved, denied, or failed._"
+                    )
+                    audit_display = gr.Dataframe(
+                        headers=["Time", "Tool", "Risk", "Outcome", "Reasons"],
+                        datatype=["str", "str", "str", "str", "str"],
+                        col_count=(5, "fixed"),
+                        label=None,
+                        show_label=False,
+                        wrap=True,
+                    )
+                    audit_refresh_btn = gr.Button("🔄 Refresh", size="sm", variant="secondary")
+
+                    def get_audit_table(session_id: str):
+                        session = self.session_manager.get_session(session_id)
+                        if session is None:
+                            return []
+                        entries = session.get_tool_audit_entries(limit=50)
+                        return [
+                            [
+                                e["created_at"][:19],
+                                e["tool_name"],
+                                e["risk_level"],
+                                e["outcome"],
+                                "; ".join(e["reasons"]) if e["reasons"] else "—",
+                            ]
+                            for e in entries
+                        ]
+
+                    audit_refresh_btn.click(
+                        get_audit_table,
+                        inputs=[session_state],
+                        outputs=[audit_display],
+                    )
+                    audit_timer = gr.Timer(value=10)
+                    audit_timer.tick(
+                        get_audit_table,
+                        inputs=[session_state],
+                        outputs=[audit_display],
+                    )
+
             def init_and_get_info(
                 request: gr.Request,
             ) -> Tuple[str, str, str, str, str, str, Any]:
@@ -653,7 +805,7 @@ class ToasterApp:
                 return (
                     session_id,
                     session_id,
-                    get_conversation_display(session_id),
+                    get_talk_tab_updates(session_id)[0],
                     get_session_info(session_id),
                     get_recipes_display(),
                     get_tool_management_info(session_id),

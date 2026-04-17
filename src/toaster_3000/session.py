@@ -1,6 +1,8 @@
 """Session management for Toaster 3000."""
 
 import html
+import threading
+import time
 from collections import deque
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple
@@ -150,6 +152,8 @@ class ToasterSession:
         # Add intro message to chat display; audio plays via WebRTC on first turn
         self.chat_history.add_message("assistant", TOASTER_INTRO)
         self._intro_played = False
+        self.last_active: float = time.time()
+        self._countdown_html: str = ""
 
     def _build_agent(self) -> Any:
         """Create a ToolCallingAgent with the full toast tool suite."""
@@ -291,6 +295,31 @@ class ToasterSession:
         with self._lock:
             self.agent = self._build_agent()
 
+    def _start_toast_countdown(self, arguments: Dict[str, Any]) -> None:
+        """Launch a background thread that animates a toast countdown bar."""
+        try:
+            thickness = float(arguments.get("thickness_mm", 20))
+            darkness = str(arguments.get("darkness", "medium")).lower()
+            base = {"light": 60, "medium": 90, "dark": 120}.get(darkness, 90)
+            duration = max(10, int(base * (thickness / 20)))
+        except Exception:
+            duration = 60
+
+        def _run(session_ref, total: int) -> None:
+            for remaining in range(total, -1, -1):
+                pct = int((total - remaining) / total * 100)
+                session_ref._countdown_html = (
+                    f"<div class='countdown-bar'>"
+                    f"🍞 Toasting… <strong>{remaining}s</strong> remaining"
+                    f"<div class='countdown-progress' style='width:{pct}%'></div>"
+                    f"</div>"
+                )
+                time.sleep(1)
+            session_ref._countdown_html = ""
+
+        t = threading.Thread(target=_run, args=(self, duration), daemon=True)
+        t.start()
+
     def stream_text_input(
         self, text: str
     ) -> Generator[Tuple[str, Optional[Tuple[int, Any]]], None, None]:
@@ -300,8 +329,6 @@ class ToasterSession:
             (html, audio) tuples — audio is None for intermediate states,
             populated only on the final yield.
         """
-        import time
-
         if not text or not text.strip():
             yield self.chat_history.format_html(), None
             return
@@ -309,6 +336,7 @@ class ToasterSession:
         from smolagents.memory import FinalAnswerStep
         from smolagents.memory import ToolCall as AgentToolCall
 
+        self.last_active = time.time()
         self.chat_history.add_message("user", text)
         yield self.chat_history.format_html_thinking(), None
 
@@ -321,8 +349,9 @@ class ToasterSession:
                 text, max_steps=steps, reset=False, stream=True
             ):
                 if isinstance(event, AgentToolCall):
-                    # ToolCall fires before execution — tell the user what's about to happen
                     status = _TOOL_STATUS.get(event.name, f"Using {event.name}")
+                    if event.name == "toast_calculator":
+                        self._start_toast_countdown(event.arguments or {})
                     yield self.chat_history.format_html_thinking(status), None
                 elif isinstance(event, FinalAnswerStep):
                     final_response = (
@@ -359,6 +388,7 @@ class ToasterSession:
         """
         if not user_input or not user_input.strip():
             return ""
+        self.last_active = time.time()
         self.chat_history.add_message("user", user_input)
         response = self._get_agent_response(user_input)
         self.chat_history.add_message("assistant", response)
@@ -439,11 +469,8 @@ class ToasterSession:
             # Transcribe audio to text
             user_text = self.runtime.stt_service.transcribe(audio)
 
-            if not user_text.strip():
-                user_text = (
-                    "I couldn't hear that clearly. Could you please repeat? "
-                    "Perhaps you could ask me about toasting something?"
-                )
+            if not user_text or len(user_text.split()) < 2:
+                return self.chat_history.format_html(), None
 
             # Process as text input
             return self.process_text_input(user_text)

@@ -374,6 +374,65 @@ select option {
     pointer-events: none !important;
 }
 
+.tool-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 8px 0;
+}
+.tool-card {
+    background: #2a2a2a;
+    border: 1px solid #FF6B35;
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 160px;
+    max-width: 240px;
+    flex: 1 1 160px;
+}
+.tool-card-name {
+    color: #FF6B35;
+    font-size: 0.95em;
+    display: block;
+    margin-bottom: 4px;
+}
+.tool-card-desc {
+    color: #ccc;
+    font-size: 0.82em;
+    margin: 0;
+}
+.tool-gallery-empty {
+    color: #888;
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.countdown-bar {
+    background: #FFF3E0;
+    border-left: 4px solid #FF6B35;
+    padding: 10px 14px;
+    border-radius: 6px;
+    color: #5a3a1a;
+    margin: 8px 0;
+    font-size: 0.9em;
+}
+.countdown-progress {
+    height: 6px;
+    background: #FF6B35;
+    border-radius: 3px;
+    transition: width 0.8s linear;
+    margin-top: 6px;
+}
+
+.idle-warning {
+    background: #FFF3CD;
+    border-left: 4px solid #FF6B35;
+    padding: 10px 14px;
+    border-radius: 6px;
+    color: #5a3a1a;
+    margin: 8px 0;
+    font-size: 0.9em;
+}
+
 /* Make the FastRTC microphone permission card look like the primary action. */
 .audio-container {
     max-width: 520px !important;
