@@ -60,26 +60,18 @@ class ToasterRuntime:
         """Initialize external model connections."""
         from faster_whisper import WhisperModel
         from fastrtc import KokoroTTSOptions, get_tts_model
-        from smolagents import CodeAgent, InferenceClientModel
+        from smolagents import InferenceClientModel
 
-        from toaster_3000.constants import TOASTER_SYSTEM_PROMPT
+        from toaster_3000.recipes import RecipeStore
         from toaster_3000.services import STTService, TTSService
+        from toaster_3000.tool_audit import ToolAuditStore
 
-        # Initialize AI model
+        self.recipe_store = RecipeStore()
+        self.tool_audit_store = ToolAuditStore()
+
+        # Initialize AI model (agents are created per-session, not here)
         self.model = InferenceClientModel(
             model_id=self.config.model_id, token=self.config.hf_api_key
-        )
-
-        # Initialize agent with toaster personality
-        self.agent = CodeAgent(
-            tools=[],
-            model=self.model,
-            max_steps=self.config.max_agent_steps,
-        )
-        self.agent.prompt_templates["system_prompt"] = (
-            self.agent.prompt_templates["system_prompt"]
-            + "\n\n"
-            + TOASTER_SYSTEM_PROMPT
         )
 
         # Initialize TTS
@@ -104,7 +96,7 @@ class ToasterRuntime:
     def switch_model(self, model_id: str) -> str:
         """Switch the AI model at runtime without restarting.
 
-        Reinitializes the model and agent while keeping TTS/STT alive.
+        Replaces self.model; callers should refresh their per-session agents.
         Thread-safe for concurrent session access.
 
         Args:
@@ -113,30 +105,14 @@ class ToasterRuntime:
         Returns:
             Status message
         """
-        from smolagents import CodeAgent, InferenceClientModel
-
-        from toaster_3000.constants import TOASTER_SYSTEM_PROMPT
+        from smolagents import InferenceClientModel
 
         with self._lock:
-            # Update config reference
             self.config = self.config.__class__(
                 **{**vars(self.config), "model_id": model_id}
             )
-
-            # Reinitialize model and agent
             self.model = InferenceClientModel(
                 model_id=model_id, token=self.config.hf_api_key
-            )
-
-            self.agent = CodeAgent(
-                tools=[],
-                model=self.model,
-                max_steps=self.config.max_agent_steps,
-            )
-            self.agent.prompt_templates["system_prompt"] = (
-                self.agent.prompt_templates["system_prompt"]
-                + "\n\n"
-                + TOASTER_SYSTEM_PROMPT
             )
 
         return f"Toaster brain upgraded to {model_id}!"

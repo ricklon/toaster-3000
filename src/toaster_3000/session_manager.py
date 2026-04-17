@@ -86,6 +86,13 @@ class SessionManager:
         with self._lock:
             return list(self._sessions.keys())
 
+    def refresh_all_agents(self) -> None:
+        """Rebuild each session's agent after a model switch."""
+        with self._lock:
+            sessions = list(self._sessions.values())
+        for session in sessions:
+            session.refresh_agent()
+
     def clear_all_sessions(self) -> int:
         """Destroy all sessions.
 

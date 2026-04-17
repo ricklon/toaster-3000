@@ -1,10 +1,44 @@
 """Service classes for TTS and STT operations."""
 
 import io
+import re
 from threading import Lock
-from typing import Any, List, Optional, Tuple
+from typing import Any, Generator, List, Optional, Tuple
 
 import numpy as np
+
+
+def strip_markdown(text: str) -> str:
+    """Remove markdown syntax so TTS reads clean prose."""
+    # Fenced code blocks
+    text = re.sub(r"```[\s\S]*?```", "code block", text)
+    # Inline code
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    # Headers
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+    # Bold + italic combined
+    text = re.sub(r"\*\*\*(.+?)\*\*\*", r"\1", text)
+    text = re.sub(r"___(.+?)___", r"\1", text)
+    # Bold
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"__(.+?)__", r"\1", text)
+    # Italic
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"_(.+?)_", r"\1", text)
+    # Links — keep link text
+    text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+    # Bullet/numbered list markers
+    text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
+    # Horizontal rules
+    text = re.sub(r"^\s*[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)
+    # Paragraph breaks → sentence pause
+    text = re.sub(r"\n{2,}", ". ", text)
+    text = re.sub(r"\n", " ", text)
+    # Tidy stray punctuation and whitespace
+    text = re.sub(r"\.{2,}", ".", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
 
 
 class TTSService:
@@ -25,13 +59,14 @@ class TTSService:
         """Generate complete audio for text (thread-safe).
 
         Args:
-            text: Text to convert to speech
+            text: Text to convert to speech (markdown stripped automatically)
 
         Returns:
             Tuple of (sample_rate, audio_array) or None if failed
         """
         if not text or not text.strip():
             return None
+        text = strip_markdown(text)
 
         with self._lock:
             try:
@@ -44,13 +79,11 @@ class TTSService:
                         self._model.stream_tts_sync(segment, options=self._options)
                     )
 
-                    if audio_chunks:
-                        audio_data = audio_chunks[0]
+                    for audio_data in audio_chunks:
                         if isinstance(audio_data, tuple):
                             seg_rate, seg_audio = audio_data
                             if sample_rate is None:
                                 sample_rate = seg_rate
-                            # Convert to numpy array if needed
                             if hasattr(seg_audio, "shape"):
                                 all_audio_data.append(seg_audio)
                             else:
@@ -59,6 +92,7 @@ class TTSService:
                 # Concatenate all audio segments
                 if all_audio_data and sample_rate:
                     complete_audio = np.concatenate(all_audio_data)
+                    complete_audio = (complete_audio * 32767).clip(-32768, 32767).astype(np.int16)
                     return (sample_rate, complete_audio)
 
             except Exception as e:
@@ -75,8 +109,7 @@ class TTSService:
                         chunks = list(
                             self._model.stream_tts_sync(seg, options=self._options)
                         )
-                        if chunks:
-                            chunk_data = chunks[0]
+                        for chunk_data in chunks:
                             if isinstance(chunk_data, tuple):
                                 rate, audio = chunk_data
                                 if fallback_rate is None:
@@ -88,11 +121,39 @@ class TTSService:
                                 )
 
                     if fallback_audio and fallback_rate:
-                        return (fallback_rate, np.concatenate(fallback_audio))
+                        combined = np.concatenate(fallback_audio)
+                        combined = (combined * 32767).clip(-32768, 32767).astype(np.int16)
+                        return (fallback_rate, combined)
                 except Exception as fallback_error:
                     print(f"Fallback TTS also failed: {fallback_error}")
 
         return None
+
+    def stream_audio_chunks(
+        self, text: str
+    ) -> Generator[Tuple[int, Any], None, None]:
+        """Yield TTS audio chunks per sentence segment for low-latency WebRTC streaming.
+
+        Args:
+            text: Text to convert (markdown stripped automatically)
+
+        Yields:
+            (sample_rate, audio_chunk) tuples as each sentence is synthesised.
+        """
+        clean = strip_markdown(text)
+        if not clean:
+            return
+        for segment in self._split_text_into_segments(clean):
+            try:
+                with self._lock:
+                    chunks = list(
+                        self._model.stream_tts_sync(segment, options=self._options)
+                    )
+                for chunk in chunks:
+                    if isinstance(chunk, tuple):
+                        yield chunk
+            except Exception as e:
+                print(f"TTSService stream error on segment: {e}")
 
     @staticmethod
     def _split_text_into_segments(text: str, max_length: int = 200) -> List[str]:

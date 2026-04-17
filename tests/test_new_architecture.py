@@ -84,12 +84,14 @@ class TestToasterSessionDesign:
 
         config = Mock()
         config.max_chat_history = 50
+        config.max_agent_steps = 1
 
         runtime = Mock(spec=ToasterRuntime)
         runtime.config = config
 
-        session1 = ToasterSession("session-1", runtime)
-        session2 = ToasterSession("session-2", runtime)
+        with patch.object(ToasterSession, "_build_agent", return_value=Mock()):
+            session1 = ToasterSession("session-1", runtime)
+            session2 = ToasterSession("session-2", runtime)
 
         # Add message to session1 only (session2 already has intro)
         session1.chat_history.add_message("user", "Message from session 1")
@@ -117,17 +119,15 @@ class TestToasterSessionDesign:
         mock_runtime = Mock()
         mock_runtime.config = config
 
-        session = ToasterSession("test-session", mock_runtime)
-
-        # Mock the agent response
         mock_agent = Mock()
         mock_agent.run.return_value = "Toasty response!"
-        mock_runtime.agent = mock_agent
 
-        # Mock TTS service
         mock_tts = Mock()
         mock_tts.generate_audio.return_value = (16000, [0.0, 0.1, 0.2])
         mock_runtime.tts_service = mock_tts
+
+        with patch.object(ToasterSession, "_build_agent", return_value=mock_agent):
+            session = ToasterSession("test-session", mock_runtime)
 
         html, audio = session.process_text_input("Hello toaster!")
 
@@ -141,11 +141,13 @@ class TestToasterSessionDesign:
 
         config = Mock()
         config.max_chat_history = 50
+        config.max_agent_steps = 1
 
         mock_runtime = Mock()
         mock_runtime.config = config
 
-        session = ToasterSession("test-session", mock_runtime)
+        with patch.object(ToasterSession, "_build_agent", return_value=Mock()):
+            session = ToasterSession("test-session", mock_runtime)
         # Session starts with intro message
         assert len(session.chat_history.get_all()) == 1
 
@@ -259,6 +261,13 @@ class TestSessionManagerDesign:
         mock_runtime.config = mock_config
         return mock_runtime
 
+    @pytest.fixture(autouse=True)
+    def _patch_build_agent(self):
+        from toaster_3000.session import ToasterSession
+
+        with patch.object(ToasterSession, "_build_agent", return_value=Mock()):
+            yield
+
     def test_session_manager_creates_unique_sessions(self) -> None:
         """SessionManager must create unique sessions"""
         from toaster_3000.session_manager import SessionManager
@@ -308,6 +317,70 @@ class TestSessionManagerDesign:
         manager.destroy_session(session_id)
         assert manager.get_session_count() == 0
         assert manager.get_session(session_id) is None
+
+
+class TestDynamicToolAudit:
+    """Dynamic tool registration should be transparent and auditable."""
+
+    def _runtime(self, tmp_path):
+        from toaster_3000.tool_audit import ToolAuditStore
+
+        config = Mock()
+        config.max_chat_history = 50
+        config.max_agent_steps = 1
+
+        runtime = Mock()
+        runtime.config = config
+        runtime.model = Mock()
+        runtime.recipe_store = Mock()
+        runtime.tool_audit_store = ToolAuditStore(tmp_path / "tool_audit.jsonl")
+        return runtime
+
+    def test_safe_tool_registration_is_logged(self, tmp_path) -> None:
+        from toaster_3000.session import ToasterSession
+
+        runtime = self._runtime(tmp_path)
+        with patch.object(ToasterSession, "_build_agent", return_value=Mock()):
+            session = ToasterSession("session-1", runtime)
+
+        result = session._queue_tool_registration(
+            "toast_score",
+            "def toast_score(thickness, heat):\n"
+            "    return str(int(thickness) * int(heat))",
+            "Scores toast intensity.",
+        )
+        assert "risk none" in result
+
+        with patch.object(session, "_build_agent", return_value=Mock()):
+            session._flush_pending_registrations()
+
+        entries = runtime.tool_audit_store.list_recent(session_id="session-1")
+        assert len(entries) == 1
+        assert entries[0].risk_level == "none"
+        assert entries[0].outcome == "registered"
+
+    def test_low_risk_tool_registration_is_denied_and_logged(self, tmp_path) -> None:
+        from toaster_3000.session import ToasterSession
+
+        runtime = self._runtime(tmp_path)
+        with patch.object(ToasterSession, "_build_agent", return_value=Mock()):
+            session = ToasterSession("session-1", runtime)
+
+        result = session._queue_tool_registration(
+            "read_file",
+            "def read_file(path):\n    return open(path).read()",
+            "Reads a file.",
+        )
+
+        assert "was not registered" in result
+        assert "Risk: low" in result
+        assert session.get_custom_tools() == []
+
+        entries = runtime.tool_audit_store.list_recent(session_id="session-1")
+        assert len(entries) == 1
+        assert entries[0].risk_level == "low"
+        assert entries[0].outcome == "denied"
+        assert any("open" in reason for reason in entries[0].reasons)
 
 
 class TestDependencyInjectionDesign:

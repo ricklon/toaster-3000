@@ -12,7 +12,7 @@ class ToasterConfig:
     """
 
     hf_api_key: str
-    model_id: str = "meta-llama/Llama-3.3-70B-Instruct"
+    model_id: str = "google/gemma-4-31B-it"
     max_agent_steps: int = 1
     max_chat_history: int = 50
     tts_voice: str = "am_liam"

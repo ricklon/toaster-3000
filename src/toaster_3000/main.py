@@ -54,7 +54,7 @@ def load_config_from_env() -> ToasterConfig:
     # Build configuration with defaults
     return ToasterConfig(
         hf_api_key=api_key,
-        model_id=os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct"),
+        model_id=os.getenv("MODEL_NAME", "google/gemma-4-31B-it"),
         max_agent_steps=int(os.getenv("MAX_AGENT_STEPS", "1")),
         max_chat_history=int(os.getenv("MAX_CHAT_HISTORY", "50")),
         tts_voice=os.getenv("TTS_VOICE", "am_liam"),
@@ -72,11 +72,6 @@ def main() -> None:
         print(f"Using model: {config.model_id}")
         print(f"Max agent steps: {config.max_agent_steps}")
         print(f"Max chat history: {config.max_chat_history}")
-
-        # Initialize runtime (singleton)
-        print("Initializing runtime...")
-        ToasterRuntime(config)
-        print("Runtime initialized successfully.")
 
         # Create and launch app
         print("Creating application...")
