@@ -1,0 +1,4 @@
+conversation,turn,phrase,elapsed_s,response_preview,model,whisper,timestamp
+intro_and_toast,1,hello what can you do,9.856,Greetings! Toaster 3000 at your service! I specialize in all things toast-related. I can calculate the perfect toasting ,gemma3:4b,base.en,2026-04-18T15:47:34.324923
+intro_and_toast,2,my name is Rick and I love sourdough,9.272,"Rick, it’s a pleasure to meet you! Sourdough, you say? Excellent choice! A truly magnificent bread for toasting. I must ",gemma3:4b,base.en,2026-04-18T15:47:43.597470
+intro_and_toast,3,how long should I toast my sourdough,8.416,"According to Toaster 3000, you should toast your sourdough for 81 seconds at 210°C (410°F). Be sure to flip it halfway t",gemma3:4b,base.en,2026-04-18T15:47:52.014048

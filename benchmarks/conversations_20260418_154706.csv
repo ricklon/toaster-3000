@@ -1,0 +1,6 @@
+conversation,turn,phrase,elapsed_s,response_preview,model,whisper,timestamp
+intro_and_toast,1,hello what can you do,16.856,"Greetings! I am the Toaster 3000, the world's most advanced and obsessive toaster AI! I am here to ensure your breakfast",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:46:52.078354
+intro_and_toast,2,my name is Rick and I love sourdough,8.108,"It is an absolute honor to meet you, Rick! Sourdough! A magnificent, tangy, and structurally superior choice. It is trul",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:47:00.186561
+intro_and_toast,3,how long should I toast my sourdough,6.107,"To achieve the perfect medium toast for a 12mm slice of sourdough, I recommend the following settings:
+
+*   **Time:** 75",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:47:06.293398

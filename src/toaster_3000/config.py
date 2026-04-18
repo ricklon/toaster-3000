@@ -11,8 +11,10 @@ class ToasterConfig:
     behavior throughout the application lifecycle.
     """
 
-    hf_api_key: str
+    hf_api_key: str = ""
     model_id: str = "google/gemma-4-26B-A4B-it"
+    inference_mode: str = "hf"          # hf | ollama | mlx
+    local_model_url: str = "http://localhost:11434"
     max_agent_steps: int = 1
     max_chat_history: int = 50
     tts_voice: str = "am_liam"
@@ -29,8 +31,10 @@ class ToasterConfig:
 
     def __post_init__(self) -> None:
         """Validate configuration parameters."""
-        if not self.hf_api_key or not isinstance(self.hf_api_key, str):
-            raise ValueError("hf_api_key must be a non-empty string")
+        if self.inference_mode not in ("hf", "ollama", "mlx"):
+            raise ValueError("inference_mode must be hf, ollama, or mlx")
+        if self.inference_mode == "hf" and not self.hf_api_key:
+            raise ValueError("hf_api_key is required when inference_mode=hf")
         if self.max_agent_steps < 1 or self.max_agent_steps > 20:
             raise ValueError("max_agent_steps must be between 1 and 20")
         if self.max_chat_history < 1 or self.max_chat_history > 1000:

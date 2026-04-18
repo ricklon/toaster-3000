@@ -2,7 +2,7 @@
 
 import threading
 from threading import Lock
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from toaster_3000.config import ToasterConfig
@@ -57,11 +57,29 @@ class ToasterRuntime:
         self._init_done = True
         ToasterRuntime._initialized = True
 
+    @staticmethod
+    def _build_model(config: "ToasterConfig") -> Any:
+        """Build the LLM model object for the given inference mode."""
+        if config.inference_mode == "hf":
+            from smolagents import InferenceClientModel
+            return InferenceClientModel(
+                model_id=config.model_id, token=config.hf_api_key
+            )
+        elif config.inference_mode == "ollama":
+            from smolagents import LiteLLMModel
+            return LiteLLMModel(
+                model_id=f"ollama/{config.model_id}",
+                api_base=f"{config.local_model_url}",
+            )
+        elif config.inference_mode == "mlx":
+            from smolagents import MLXModel
+            return MLXModel(model_id=config.model_id)
+        raise ValueError(f"Unknown inference_mode: {config.inference_mode}")
+
     def _init_models(self) -> None:
         """Initialize external model connections."""
         from faster_whisper import WhisperModel
         from fastrtc import KokoroTTSOptions, get_tts_model
-        from smolagents import InferenceClientModel
 
         from toaster_3000.recipes import RecipeStore
         from toaster_3000.services import STTService, TTSService
@@ -71,9 +89,7 @@ class ToasterRuntime:
         self.tool_audit_store = ToolAuditStore()
 
         # Initialize AI model (agents are created per-session, not here)
-        self.model = InferenceClientModel(
-            model_id=self.config.model_id, token=self.config.hf_api_key
-        )
+        self.model = self._build_model(self.config)
 
         # Initialize TTS
         self.tts_model = get_tts_model(model="kokoro")
@@ -120,15 +136,15 @@ class ToasterRuntime:
         except Exception as e:
             print(f"  TTS warmup failed: {e}", flush=True)
 
-        try:
-            # HF model: send a minimal message
-            from smolagents.models import ChatMessage
-            self.model.generate(
-                [ChatMessage(role="user", content="hi")],
-            )
-            print("  LLM warmed up", flush=True)
-        except Exception as e:
-            print(f"  LLM warmup failed: {e}", flush=True)
+        if self.config.inference_mode == "hf":
+            try:
+                from smolagents.models import ChatMessage
+                self.model.generate([ChatMessage(role="user", content="hi")])
+                print("  LLM warmed up", flush=True)
+            except Exception as e:
+                print(f"  LLM warmup failed: {e}", flush=True)
+        else:
+            print(f"  LLM ({self.config.inference_mode}) — local, no warmup needed", flush=True)
 
         print("All models warmed up and ready!", flush=True)
 
@@ -150,9 +166,7 @@ class ToasterRuntime:
             self.config = self.config.__class__(
                 **{**vars(self.config), "model_id": model_id}
             )
-            self.model = InferenceClientModel(
-                model_id=model_id, token=self.config.hf_api_key
-            )
+            self.model = self._build_model(self.config)
 
         return f"Toaster brain upgraded to {model_id}!"
 

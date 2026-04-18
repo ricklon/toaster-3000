@@ -43,18 +43,28 @@ def load_config_from_env() -> ToasterConfig:
     else:
         print("No .env file found; using process environment only.")
 
-    # Get required API key
-    api_key = os.getenv("HUGGINGFACE_API_KEY")
-    if not api_key:
+    inference_mode = os.getenv("INFERENCE_MODE", "hf").lower()
+
+    api_key = os.getenv("HUGGINGFACE_API_KEY", "")
+    if inference_mode == "hf" and not api_key:
         raise RuntimeError(
-            "HUGGINGFACE_API_KEY is required. "
-            "Add it to .env or export it before running."
+            "HUGGINGFACE_API_KEY is required when INFERENCE_MODE=hf. "
+            "Add it to .env or set INFERENCE_MODE=ollama / INFERENCE_MODE=mlx."
         )
 
-    # Build configuration with defaults
+    # Default model per mode
+    mode_defaults = {
+        "hf": "google/gemma-4-26B-A4B-it",
+        "ollama": "gemma3:4b",
+        "mlx": "mlx-community/gemma-4-e4b-it-4bit",
+    }
+    default_model = mode_defaults.get(inference_mode, "google/gemma-4-26B-A4B-it")
+
     return ToasterConfig(
         hf_api_key=api_key,
-        model_id=os.getenv("MODEL_NAME", "google/gemma-4-31B-it"),
+        model_id=os.getenv("MODEL_NAME", default_model),
+        inference_mode=inference_mode,
+        local_model_url=os.getenv("LOCAL_MODEL_URL", "http://localhost:11434"),
         max_agent_steps=int(os.getenv("MAX_AGENT_STEPS", "1")),
         max_chat_history=int(os.getenv("MAX_CHAT_HISTORY", "50")),
         tts_voice=os.getenv("TTS_VOICE", "am_liam"),
@@ -69,7 +79,10 @@ def main() -> None:
     try:
         # Load configuration
         config = load_config_from_env()
+        print(f"Inference mode: {config.inference_mode}")
         print(f"Using model: {config.model_id}")
+        if config.inference_mode != "hf":
+            print(f"Local model URL: {config.local_model_url}")
         print(f"Max agent steps: {config.max_agent_steps}")
         print(f"Max chat history: {config.max_chat_history}")
 

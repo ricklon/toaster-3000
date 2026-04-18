@@ -48,18 +48,26 @@ def run_benchmark(args) -> None:
     from dotenv import load_dotenv
     load_dotenv(REPO_ROOT / ".env")
 
-    hf_key = os.getenv("HUGGINGFACE_API_KEY")
-    if not hf_key:
-        print("ERROR: HUGGINGFACE_API_KEY not set in .env")
+    hf_key = os.getenv("HUGGINGFACE_API_KEY", "")
+    inference_mode = os.getenv("INFERENCE_MODE", "hf")
+    if inference_mode == "hf" and not hf_key:
+        print("ERROR: HUGGINGFACE_API_KEY not set in .env (required for INFERENCE_MODE=hf)")
         sys.exit(1)
 
     from toaster_3000.config import ToasterConfig
     from toaster_3000.runtime import ToasterRuntime
 
-    model_id = args.model or os.getenv("MODEL_NAME", "google/gemma-3-4b-it")
+    mode_defaults = {
+        "hf": "google/gemma-4-26B-A4B-it",
+        "ollama": "gemma3:4b",
+        "mlx": "mlx-community/gemma-4-e4b-it-4bit",
+    }
+    model_id = args.model or os.getenv("MODEL_NAME", mode_defaults.get(inference_mode, "google/gemma-4-26B-A4B-it"))
     config = ToasterConfig(
         hf_api_key=hf_key,
         model_id=model_id,
+        inference_mode=inference_mode,
+        local_model_url=os.getenv("LOCAL_MODEL_URL", "http://localhost:11434"),
         whisper_model_size=args.whisper,
         max_agent_steps=1,
     )
@@ -195,19 +203,26 @@ def run_conversation_benchmark(args) -> None:
     from dotenv import load_dotenv
     load_dotenv(REPO_ROOT / ".env")
 
-    hf_key = os.getenv("HUGGINGFACE_API_KEY")
-    if not hf_key:
-        print("ERROR: HUGGINGFACE_API_KEY not set in .env")
+    hf_key = os.getenv("HUGGINGFACE_API_KEY", "")
+    inference_mode = os.getenv("INFERENCE_MODE", "hf")
+    if inference_mode == "hf" and not hf_key:
+        print("ERROR: HUGGINGFACE_API_KEY not set in .env (required for INFERENCE_MODE=hf)")
         sys.exit(1)
 
     from toaster_3000.config import ToasterConfig
     from toaster_3000.runtime import ToasterRuntime
     from toaster_3000.session import ToasterSession
-
-    model_id = args.model or os.getenv("MODEL_NAME", "google/gemma-3-12b-it")
+    mode_defaults = {
+        "hf": "google/gemma-4-26B-A4B-it",
+        "ollama": "gemma3:4b",
+        "mlx": "mlx-community/gemma-4-e4b-it-4bit",
+    }
+    model_id = args.model or os.getenv("MODEL_NAME", mode_defaults.get(inference_mode, "google/gemma-4-26B-A4B-it"))
     config = ToasterConfig(
         hf_api_key=hf_key,
         model_id=model_id,
+        inference_mode=inference_mode,
+        local_model_url=os.getenv("LOCAL_MODEL_URL", "http://localhost:11434"),
         whisper_model_size=args.whisper,
         max_agent_steps=1,
     )
