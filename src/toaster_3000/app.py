@@ -533,14 +533,30 @@ class ToasterApp:
                     with gr.Row():
                         with gr.Column():
                             gr.Markdown("#### Model")
-                            model_dropdown = gr.Dropdown(
-                                choices=[
-                                    "google/gemma-4-26B-A4B-it",
-                                    "google/gemma-4-31B-it",
-                                    "google/gemma-3-12b-it",
-                                    "google/gemma-3-27b-it",
-                                    "meta-llama/Llama-3.1-8B-Instruct",
+                            _hf_models = [
+                                "google/gemma-4-26B-A4B-it",
+                                "google/gemma-4-31B-it",
+                                "google/gemma-3-12b-it",
+                                "google/gemma-3-27b-it",
+                                "meta-llama/Llama-3.1-8B-Instruct",
+                            ]
+                            _ollama_models = [
+                                "gemma3:4b",
+                                "gemma3:12b",
+                                "gemma4:e2b",
+                                "gemma4:e4b",
+                            ]
+                            _mode_choices = {
+                                "hf": _hf_models,
+                                "ollama": _ollama_models,
+                                "mlx": [
+                                    "mlx-community/gemma-4-e4b-it-4bit",
+                                    "mlx-community/gemma-4-e2b-it-4bit",
+                                    "mlx-community/gemma-3-4b-it-4bit",
                                 ],
+                            }
+                            model_dropdown = gr.Dropdown(
+                                choices=_mode_choices.get(self.config.inference_mode, _hf_models),
                                 value=self.config.model_id,
                                 label="Select Model",
                                 info="Switches live — no restart needed",
