@@ -25,3 +25,7 @@ wheels/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Generated test audio and benchmark results
+tests/audio/
+benchmarks/results_*.csv

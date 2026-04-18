@@ -1,0 +1,37 @@
+{
+  "wake_word": [
+    "hey toaster",
+    "hey toast",
+    "toaster 3000"
+  ],
+  "greetings": [
+    "hello",
+    "hi there",
+    "good morning toaster",
+    "what can you do"
+  ],
+  "simple_questions": [
+    "what is the best bread for toasting",
+    "what temperature should I toast sourdough",
+    "how do I make perfect toast",
+    "what spreads go well with whole wheat toast"
+  ],
+  "calculator": [
+    "how long should I toast white bread",
+    "how long for sourdough at medium heat",
+    "toast time for a thick bagel please",
+    "what temperature and time for rye bread"
+  ],
+  "recipe": [
+    "I have bread butter and jam what can I make",
+    "I have avocado and sourdough give me a recipe",
+    "make me a recipe with eggs and toast",
+    "I have cream cheese and a bagel what should I do"
+  ],
+  "complex": [
+    "build me a crispiness calculator",
+    "write me a tool that calculates toasting time based on bread thickness",
+    "what is the history of toast",
+    "compare sourdough and whole wheat for toasting"
+  ]
+}

@@ -61,6 +61,6 @@ TOASTER_INTRO = (
 )
 
 # Configuration defaults
-DEFAULT_MODEL_ID = "meta-llama/Llama-3.3-70B-Instruct"
+DEFAULT_MODEL_ID = "google/gemma-4-26B-A4B-it"
 DEFAULT_MAX_AGENT_STEPS = 1
 DEFAULT_MAX_CHAT_HISTORY = 50

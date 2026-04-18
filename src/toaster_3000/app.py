@@ -1,8 +1,12 @@
 """Gradio application for Toaster 3000."""
 
 import html
+import logging
 from threading import Lock
 from typing import Any, Dict, Generator, Optional, Tuple
+
+logging.getLogger("fastrtc.reply_on_stopwords").setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
 
 import gradio as gr
 
@@ -144,7 +148,13 @@ class ToasterApp:
 
         return ReplyOnStopWords(
             continuous_audio_processor,
-            stop_words=["hey toaster", "hey toast"],
+            stop_words=[
+                "hey toaster",
+                "hey toast",
+                "hey toster",
+                "hey roaster",
+                "toaster 3000",
+            ],
             algo_options=algo_options,
             model_options=model_options,
         )
@@ -240,12 +250,14 @@ class ToasterApp:
             """Generate introduction audio."""
             return self.runtime.tts_service.generate_audio(TOASTER_INTRO)
 
-        def get_talk_tab_updates(session_id: str) -> Tuple[Any, str, str]:
-            """Return (conversation_html, idle_warning_html, voice_state_html)."""
+        def get_talk_tab_updates(session_id: str) -> Tuple[Any, Any, str, str]:
+            """Return (session_id, conversation_html, idle_warning_html, voice_state_html)."""
             import time as _time
             session = self.session_manager.get_session(session_id)
             if session is None:
-                return "<div class='error'>Error: Session expired</div>", "", _render_voice_state("sleeping")
+                session_id = self.session_manager.create_session()
+                session = self.session_manager.get_session(session_id)
+                return session_id, "<div class='info'>Reconnected — ready!</div>", "", _render_voice_state("sleeping")
             idle = _time.time() - session.last_active
             if idle > 240:
                 mins = int(idle // 60)
@@ -261,9 +273,10 @@ class ToasterApp:
             countdown_active = bool(session._countdown_html)
             cache_key = (msg_count, voice_state, countdown_active)
             if self._last_talk_state.get(session_id) == cache_key and not warning:
-                return gr.update(), gr.update(), gr.update()
+                return gr.update(), gr.update(), gr.update(), gr.update()
             self._last_talk_state[session_id] = cache_key
             return (
+                gr.update(),
                 session.chat_history.format_html(extra_html=session._countdown_html),
                 warning,
                 _render_voice_state(voice_state),
@@ -435,7 +448,7 @@ class ToasterApp:
                     voice_timer.tick(
                         get_talk_tab_updates,
                         inputs=[session_state],
-                        outputs=[conversation_display, idle_warning, voice_state_indicator],
+                        outputs=[session_state, conversation_display, idle_warning, voice_state_indicator],
                     )
 
                     with gr.Row():
@@ -522,13 +535,11 @@ class ToasterApp:
                             gr.Markdown("#### Model")
                             model_dropdown = gr.Dropdown(
                                 choices=[
-                                    "google/gemma-4-31B-it",
                                     "google/gemma-4-26B-A4B-it",
-                                    "Qwen/Qwen3-Coder-Next",
-                                    "Qwen/Qwen3-14B",
-                                    "mistralai/Mistral-Small-4-119B-2603",
-                                    "mistralai/Devstral-Small-2-24B-Instruct-2512",
-                                    "meta-llama/Llama-3.3-70B-Instruct",
+                                    "google/gemma-4-31B-it",
+                                    "google/gemma-3-12b-it",
+                                    "google/gemma-3-27b-it",
+                                    "meta-llama/Llama-3.1-8B-Instruct",
                                 ],
                                 value=self.config.model_id,
                                 label="Select Model",

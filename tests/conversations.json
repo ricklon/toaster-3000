@@ -1,0 +1,22 @@
+{
+  "intro_and_toast": [
+    "hello what can you do",
+    "my name is Rick and I love sourdough",
+    "how long should I toast my sourdough"
+  ],
+  "recipe_and_save": [
+    "I have avocado and sourdough give me a recipe",
+    "that sounds great save that recipe for me",
+    "what recipes do I have saved"
+  ],
+  "calculator_followup": [
+    "how long should I toast white bread",
+    "what about at a higher temperature",
+    "thanks what is your favorite bread"
+  ],
+  "tool_building": [
+    "build me a crispiness calculator",
+    "register that as a tool",
+    "now use that tool for a thick slice of rye"
+  ]
+}

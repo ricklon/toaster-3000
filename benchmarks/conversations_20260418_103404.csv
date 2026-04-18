@@ -1,0 +1,4 @@
+conversation,turn,phrase,elapsed_s,response_preview,model,whisper,timestamp
+intro_and_toast,1,hello what can you do,30.064,"I'm Toaster 3000, and I'm here to help you with all things toast! I can calculate toasting times, find recipes, and so m",google/gemma-3-12b-it,base.en,2026-04-18T10:33:29.374387
+intro_and_toast,2,my name is Rick and I love sourdough,17.152,"It's a delight to meet you, Rick! Sourdough is a fantastic choice—a truly sublime bread. What toast adventure are you cr",google/gemma-3-12b-it,base.en,2026-04-18T10:33:46.526813
+intro_and_toast,3,how long should I toast my sourdough,17.784,"To determine the perfect toasting time for your sourdough, I need a little more information! What's the thickness of you",google/gemma-3-12b-it,base.en,2026-04-18T10:34:04.311505

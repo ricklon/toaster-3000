@@ -12,16 +12,16 @@ class ToasterConfig:
     """
 
     hf_api_key: str
-    model_id: str = "google/gemma-4-31B-it"
+    model_id: str = "google/gemma-4-26B-A4B-it"
     max_agent_steps: int = 1
     max_chat_history: int = 50
     tts_voice: str = "am_liam"
     tts_speed: float = 1.0
     tts_lang: str = "en-us"
-    whisper_model_size: str = "tiny.en"
+    whisper_model_size: str = "base.en"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
-    no_speech_threshold: float = 0.7
+    no_speech_threshold: float = 0.6
     max_snapshot_age_hours: int = 4
     rate_limit_runs_per_minute: int = 10
     hf_max_concurrent: int = 3

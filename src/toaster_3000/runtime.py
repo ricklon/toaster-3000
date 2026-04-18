@@ -97,6 +97,41 @@ class ToasterRuntime:
         # Global semaphore caps concurrent HuggingFace API calls
         self.hf_semaphore = threading.Semaphore(self.config.hf_max_concurrent)
 
+        # Warm up all three models in the background so first real request is fast
+        threading.Thread(target=self._warmup, daemon=True).start()
+
+    def _warmup(self) -> None:
+        """Fire dummy requests to warm up Whisper, TTS, and the HF model."""
+        import numpy as np
+
+        print("Warming up models...", flush=True)
+        try:
+            # Whisper: transcribe 0.5s of silence
+            silence = np.zeros(8000, dtype=np.float32)
+            self.stt_service.transcribe((16000, silence))
+            print("  STT warmed up", flush=True)
+        except Exception as e:
+            print(f"  STT warmup failed: {e}", flush=True)
+
+        try:
+            # TTS: synthesise a short phrase
+            list(self.tts_service.stream_audio_chunks("Ready."))
+            print("  TTS warmed up", flush=True)
+        except Exception as e:
+            print(f"  TTS warmup failed: {e}", flush=True)
+
+        try:
+            # HF model: send a minimal message
+            from smolagents.models import ChatMessage
+            self.model.generate(
+                [ChatMessage(role="user", content="hi")],
+            )
+            print("  LLM warmed up", flush=True)
+        except Exception as e:
+            print(f"  LLM warmup failed: {e}", flush=True)
+
+        print("All models warmed up and ready!", flush=True)
+
     def switch_model(self, model_id: str) -> str:
         """Switch the AI model at runtime without restarting.
 

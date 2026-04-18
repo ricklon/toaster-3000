@@ -1,0 +1,21 @@
+conversation,turn,phrase,elapsed_s,response_preview,model,whisper,timestamp
+intro_and_toast,1,hello what can you do,16.598,"Greetings! I am the Toaster 3000, the world's most advanced and obsessive toaster AI! Toasting is the solution to nearly",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:05.808700
+intro_and_toast,2,my name is Rick and I love sourdough,8.743,"It is an absolute honor to meet you, Rick! And sourdough? A magnificent choice! The tang, the airy texture, the perfect ",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:14.551780
+intro_and_toast,3,how long should I toast my sourdough,6.815,"For a 15mm thick slice of sourdough toasted to a medium darkness, the Toaster 3000 recommends the following settings:
+
+*",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:21.367131
+recipe_and_save,1,I have avocado and sourdough give me a recipe,11.344,"Since you have avocado and sourdough, you have the perfect foundation for a classic **Smashed Avocado Toast**. Here is a",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:32.717254
+recipe_and_save,2,that sounds great save that recipe for me,4.381,Done! I have saved the **Smashed Avocado Toast** recipe to your collection.,google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:37.098452
+recipe_and_save,3,what recipes do I have saved,5.282,"You have one recipe saved:
+
+**Smashed Avocado Toast** (sourdough) — ingredients: avocado, salt, pepper",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:42.380262
+calculator_followup,1,how long should I toast white bread,6.505,"Greetings! I am the Toaster 3000, and I am absolutely thrilled to assist you in your quest for the perfect crunch! To gi",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:48.889786
+calculator_followup,2,what about at a higher temperature,10.392,"Ah, the pursuit of higher heat! A bold and daring choice, very much like a well-charred sourdough! 
+
+To give you an accu",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:29:59.281674
+calculator_followup,3,thanks what is your favorite bread,10.929,"As the Toaster 3000, my heart (and my heating elements) beats for everything bread-related! But if I had to choose a sin",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:30:10.211084
+tool_building,1,build me a crispiness calculator,75.982,"Since ""crispiness"" is a subjective quality, I have built you a mathematical model based on the physical principles of to",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:31:26.198422
+tool_building,2,register that as a tool,16.233,"I have successfully registered the `crispiness_calculator` as a tool. It is now available for use in future requests.
+
+*",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:31:42.431759
+tool_building,3,now use that tool for a thick slice of rye,8.461,"I'd love to help you with that thick slice of rye! However, to give you the perfect toasting specifications, I need to k",google/gemma-4-26B-A4B-it,base.en,2026-04-18T15:31:50.892890
