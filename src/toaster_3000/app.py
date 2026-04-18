@@ -14,6 +14,24 @@ from toaster_3000.theme import toaster_css, toaster_theme
 from toaster_3000.tools import TOOL_RISK_POLICY_TEXT
 
 
+def _render_voice_state(state: str) -> str:
+    """Return HTML badge for the current wake-word voice state."""
+    configs = {
+        "sleeping": ("💤", "Sleeping — say <strong>Hey Toaster</strong> to wake me up", "#8a6a3a", "#FFF3E0"),
+        "listening": ("👂", "Listening…", "#234b2c", "#E8F4EA"),
+        "responding": ("🍞", "Responding…", "#5a3a1a", "#FFF3E0"),
+    }
+    icon, label, color, bg = configs.get(state, configs["sleeping"])
+    return (
+        f"<div class='voice-state-badge' style='"
+        f"background:{bg};color:{color};border-left:4px solid {color};"
+        f"padding:8px 14px;border-radius:10px;margin:6px auto;"
+        f"max-width:520px;font-size:0.92rem;display:flex;align-items:center;gap:10px;'>"
+        f"<span style='font-size:1.2em'>{icon}</span><span>{label}</span>"
+        f"</div>"
+    )
+
+
 class ToasterApp:
     """Gradio app with session-based state management."""
 
@@ -29,14 +47,16 @@ class ToasterApp:
         # Maps webrtc_id → session_id so each WebRTC connection owns its session
         self._stream_sessions: Dict[str, str] = {}
         self._stream_sessions_lock = Lock()
+        # Cache for timer polling — skip DOM update when nothing changed
+        self._last_talk_state: Dict[str, Any] = {}
 
     def _create_continuous_handler(self) -> Any:
-        """Create a fastrtc ReplyOnPause handler for continuous listening.
+        """Create a fastrtc ReplyOnStopWords handler with wake-word activation.
 
-        Returns:
-            A callable that processes audio and yields TTS chunks.
+        Listens continuously via Moonshine STT. Activates the full
+        Whisper → Agent → Kokoro TTS pipeline only after a wake phrase.
         """
-        from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions
+        from fastrtc import AlgoOptions, ReplyOnStopWords, SileroVadOptions
 
         def continuous_audio_processor(
             audio: Tuple[int, Any],
@@ -46,7 +66,7 @@ class ToasterApp:
             """Process audio via STT → Agent → TTS pipeline.
 
             Args:
-                audio: Tuple of (sample_rate, audio_data)
+                audio: Tuple of (sample_rate, audio_data) — captured after wake word.
                 session_id: Gradio session id shared with text/push-to-talk paths.
                 *extra_args: FastRTC may pass additional component values.
 
@@ -55,22 +75,16 @@ class ToasterApp:
             """
             from fastrtc import get_current_context
 
+            session = None
             try:
-                # Resolve the per-connection session via the WebRTC connection ID.
-                # Each browser tab gets a unique webrtc_id, so sessions never mix.
                 try:
                     webrtc_id = get_current_context().webrtc_id
                 except RuntimeError:
                     webrtc_id = None
 
-                # fastrtc passes its own webrtc_id as the session_id argument
-                # rather than the Gradio component value. Resolve the real session
-                # via _stream_sessions, binding on first call.
                 with self._stream_sessions_lock:
                     sid = self._stream_sessions.get(webrtc_id or "")
                     if sid is None:
-                        # Adopt the existing page-load session so the timer and
-                        # voice handler share the same chat history.
                         bound = set(self._stream_sessions.values())
                         unbound = [s for s in self.session_manager.list_sessions()
                                    if s not in bound]
@@ -80,7 +94,6 @@ class ToasterApp:
                             sid = self.session_manager.create_session()
                         if webrtc_id:
                             self._stream_sessions[webrtc_id] = sid
-                        print(f"[VOICE] bound webrtc {webrtc_id!r} → session {sid!r}")
 
                 session = self.session_manager.get_session(sid)
                 if session is None:
@@ -90,20 +103,19 @@ class ToasterApp:
                             self._stream_sessions[webrtc_id] = sid
                     session = self.session_manager.get_session(sid)
 
+                session._voice_state = "listening"
                 sample_rate, audio_data = audio
-                user_text = self.runtime.stt_service.transcribe(
+                user_text, no_speech_prob = self.runtime.stt_service.transcribe(
                     (sample_rate, audio_data)
                 )
 
-                if not user_text or len(user_text.split()) < 2:
+                if not user_text or no_speech_prob > self.runtime.config.no_speech_threshold:
                     return
 
-                if session is not None:
-                    response_text = session.get_response_text(user_text)
-                    if response_text:
-                        yield from self.runtime.tts_service.stream_audio_chunks(
-                            response_text
-                        )
+                session._voice_state = "responding"
+                response_text = session.get_response_text(user_text)
+                if response_text:
+                    yield from self.runtime.tts_service.stream_audio_chunks(response_text)
 
             except Exception as e:
                 print(f"Continuous audio processor error: {e}")
@@ -114,6 +126,9 @@ class ToasterApp:
                 error_audio = self.runtime.tts_service.generate_audio(error_msg)
                 if error_audio:
                     yield error_audio
+            finally:
+                if session is not None:
+                    session._voice_state = "sleeping"
 
         algo_options = AlgoOptions(
             audio_chunk_duration=0.6,
@@ -127,8 +142,9 @@ class ToasterApp:
             min_silence_duration_ms=100,
         )
 
-        return ReplyOnPause(
+        return ReplyOnStopWords(
             continuous_audio_processor,
+            stop_words=["hey toaster", "hey toast"],
             algo_options=algo_options,
             model_options=model_options,
         )
@@ -224,12 +240,12 @@ class ToasterApp:
             """Generate introduction audio."""
             return self.runtime.tts_service.generate_audio(TOASTER_INTRO)
 
-        def get_talk_tab_updates(session_id: str) -> Tuple[str, str]:
-            """Return (conversation_html, idle_warning_html) for the Talk tab timer."""
+        def get_talk_tab_updates(session_id: str) -> Tuple[Any, str, str]:
+            """Return (conversation_html, idle_warning_html, voice_state_html)."""
             import time as _time
             session = self.session_manager.get_session(session_id)
             if session is None:
-                return "<div class='error'>Error: Session expired</div>", ""
+                return "<div class='error'>Error: Session expired</div>", "", _render_voice_state("sleeping")
             idle = _time.time() - session.last_active
             if idle > 240:
                 mins = int(idle // 60)
@@ -240,7 +256,18 @@ class ToasterApp:
                 )
             else:
                 warning = ""
-            return session.chat_history.format_html(extra_html=session._countdown_html), warning
+            msg_count = len(session.chat_history.get_all())
+            voice_state = session._voice_state
+            countdown_active = bool(session._countdown_html)
+            cache_key = (msg_count, voice_state, countdown_active)
+            if self._last_talk_state.get(session_id) == cache_key and not warning:
+                return gr.update(), gr.update(), gr.update()
+            self._last_talk_state[session_id] = cache_key
+            return (
+                session.chat_history.format_html(extra_html=session._countdown_html),
+                warning,
+                _render_voice_state(voice_state),
+            )
 
         def get_session_info(session_id: str) -> str:
             """Get session diagnostics."""
@@ -391,6 +418,11 @@ class ToasterApp:
                     )
                     stream.ui.render()
 
+                    voice_state_indicator = gr.HTML(
+                        value=_render_voice_state("sleeping"),
+                        elem_id="voice-state-indicator",
+                        show_label=False,
+                    )
                     conversation_display = gr.HTML(
                         value="<div class='chat-container'></div>",
                         elem_id="conversation-display",
@@ -398,12 +430,12 @@ class ToasterApp:
                     )
                     idle_warning = gr.HTML(value="", elem_id="idle-warning")
 
-                    # Poll every 2 s so voice turns appear in the chat display.
-                    voice_timer = gr.Timer(value=2)
+                    # Poll every 1s so voice turns appear quickly in the chat display.
+                    voice_timer = gr.Timer(value=1)
                     voice_timer.tick(
                         get_talk_tab_updates,
                         inputs=[session_state],
-                        outputs=[conversation_display, idle_warning],
+                        outputs=[conversation_display, idle_warning, voice_state_indicator],
                     )
 
                     with gr.Row():

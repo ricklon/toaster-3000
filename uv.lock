@@ -721,6 +721,26 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/af/e1/ea3968b064a183d9ac595dcbde0e6c67033afe01852d5854a0001f7c9faa/fastrtc-0.0.34-py3-none-any.whl", hash = "sha256:6da3831da9c2257810b6c5e5fd7cdd4f1636d716f47ab49d8bb3f2d5d9e499ac", size = 2806078 },
 ]
 
+[package.optional-dependencies]
+stt = [
+    { name = "fastrtc-moonshine-onnx" },
+    { name = "onnxruntime" },
+]
+
+[[package]]
+name = "fastrtc-moonshine-onnx"
+version = "20241016"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "librosa" },
+    { name = "onnxruntime" },
+    { name = "tokenizers" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/4c/6228bdd63113148577cbec7b68018954c670aa1a280ee435ae0af641b431/fastrtc_moonshine_onnx-20241016-py3-none-any.whl", hash = "sha256:6379e45287671d8f5a224d28b17bcd3f2823197ade684a8b0300d8ea8fbd4db6", size = 729268 },
+]
+
 [[package]]
 name = "ffmpy"
 version = "0.6.1"
@@ -2887,7 +2907,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },
-    { name = "fastrtc" },
+    { name = "fastrtc", extra = ["stt"] },
     { name = "gradio" },
     { name = "hf-xet" },
     { name = "kokoro-onnx" },
@@ -2923,7 +2943,7 @@ dev = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
     { name = "faster-whisper" },
-    { name = "fastrtc", specifier = "==0.0.34" },
+    { name = "fastrtc", extras = ["stt"], specifier = "==0.0.34" },
     { name = "flake8", marker = "extra == 'dev'" },
     { name = "gradio", specifier = ">=5.0.0" },
     { name = "hf-xet", specifier = ">=1.1.10" },

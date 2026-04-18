@@ -162,6 +162,7 @@ class ToasterSession:
         self._intro_played = False
         self.last_active: float = time.time()
         self._countdown_html: str = ""
+        self._voice_state: str = "sleeping"
         # Persisted source for registered tools so they survive restarts
         self._registered_tool_sources: List[tuple] = []
 
@@ -323,6 +324,11 @@ class ToasterSession:
         return d / f"{self.session_id}.json"
 
     def save_snapshot(self) -> None:
+        """Kick off a background write so the response hot path is not blocked."""
+        t = threading.Thread(target=self._write_snapshot, daemon=True)
+        t.start()
+
+    def _write_snapshot(self) -> None:
         """Persist chat history, agent steps, and registered tools to disk."""
         import json
         from datetime import datetime, timezone

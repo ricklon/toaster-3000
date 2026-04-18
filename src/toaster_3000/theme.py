@@ -406,6 +406,15 @@ select option {
     font-size: 0.9em;
 }
 
+#voice-state-indicator {
+    max-width: 520px;
+    margin: 0 auto 8px auto;
+}
+
+.voice-state-badge {
+    transition: background 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+}
+
 .countdown-bar {
     background: #FFF3E0;
     border-left: 4px solid #FF6B35;

@@ -82,64 +82,65 @@ class TTSService:
             return None
         text = strip_markdown(text)
 
-        with self._lock:
-            try:
-                segments = self._split_text_into_segments(text, max_length=300)
-                all_audio_data = []
-                sample_rate = None
+        try:
+            segments = self._split_text_into_segments(text, max_length=300)
+            all_audio_data = []
+            sample_rate = None
 
-                for segment in segments:
+            for segment in segments:
+                with self._lock:  # lock per-segment so other sessions aren't blocked
                     audio_chunks = list(
                         self._model.stream_tts_sync(segment, options=self._options)
                     )
 
-                    for audio_data in audio_chunks:
-                        if isinstance(audio_data, tuple):
-                            seg_rate, seg_audio = audio_data
-                            if sample_rate is None:
-                                sample_rate = seg_rate
-                            if hasattr(seg_audio, "shape"):
-                                all_audio_data.append(seg_audio)
-                            else:
-                                all_audio_data.append(np.array(seg_audio))
+                for audio_data in audio_chunks:
+                    if isinstance(audio_data, tuple):
+                        seg_rate, seg_audio = audio_data
+                        if sample_rate is None:
+                            sample_rate = seg_rate
+                        if hasattr(seg_audio, "shape"):
+                            all_audio_data.append(seg_audio)
+                        else:
+                            all_audio_data.append(np.array(seg_audio))
 
-                # Concatenate all audio segments
-                if all_audio_data and sample_rate:
-                    complete_audio = np.concatenate(all_audio_data)
-                    complete_audio = (complete_audio * 32767).clip(-32768, 32767).astype(np.int16)
-                    return (sample_rate, complete_audio)
+            # Concatenate all audio segments
+            if all_audio_data and sample_rate:
+                complete_audio = np.concatenate(all_audio_data)
+                complete_audio = (complete_audio * 32767).clip(-32768, 32767).astype(np.int16)
+                return (sample_rate, complete_audio)
 
-            except Exception as e:
-                print(f"Error generating TTS: {e}")
-                # Fallback: try all segments individually
-                try:
-                    fallback_segments = self._split_text_into_segments(
-                        text, max_length=300
-                    )
-                    fallback_audio = []
-                    fallback_rate = None
+        except Exception as e:
+            print(f"Error generating TTS: {e}")
+            # Fallback: try all segments individually
+            try:
+                fallback_segments = self._split_text_into_segments(
+                    text, max_length=300
+                )
+                fallback_audio = []
+                fallback_rate = None
 
-                    for seg in fallback_segments:
+                for seg in fallback_segments:
+                    with self._lock:
                         chunks = list(
                             self._model.stream_tts_sync(seg, options=self._options)
                         )
-                        for chunk_data in chunks:
-                            if isinstance(chunk_data, tuple):
-                                rate, audio = chunk_data
-                                if fallback_rate is None:
-                                    fallback_rate = rate
-                                fallback_audio.append(
-                                    audio
-                                    if hasattr(audio, "shape")
-                                    else np.array(audio)
-                                )
+                    for chunk_data in chunks:
+                        if isinstance(chunk_data, tuple):
+                            rate, audio = chunk_data
+                            if fallback_rate is None:
+                                fallback_rate = rate
+                            fallback_audio.append(
+                                audio
+                                if hasattr(audio, "shape")
+                                else np.array(audio)
+                            )
 
-                    if fallback_audio and fallback_rate:
-                        combined = np.concatenate(fallback_audio)
-                        combined = (combined * 32767).clip(-32768, 32767).astype(np.int16)
-                        return (fallback_rate, combined)
-                except Exception as fallback_error:
-                    print(f"Fallback TTS also failed: {fallback_error}")
+                if fallback_audio and fallback_rate:
+                    combined = np.concatenate(fallback_audio)
+                    combined = (combined * 32767).clip(-32768, 32767).astype(np.int16)
+                    return (fallback_rate, combined)
+            except Exception as fallback_error:
+                print(f"Fallback TTS also failed: {fallback_error}")
 
         return None
 
