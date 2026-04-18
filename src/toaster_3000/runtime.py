@@ -1,5 +1,6 @@
 """Runtime management for Toaster 3000."""
 
+import threading
 from threading import Lock
 from typing import TYPE_CHECKING, Optional
 
@@ -92,6 +93,9 @@ class ToasterRuntime:
         # Create service wrappers
         self.tts_service = TTSService(self.tts_model, self.tts_options)
         self.stt_service = STTService(self.whisper_model)
+
+        # Global semaphore caps concurrent HuggingFace API calls
+        self.hf_semaphore = threading.Semaphore(self.config.hf_max_concurrent)
 
     def switch_model(self, model_id: str) -> str:
         """Switch the AI model at runtime without restarting.

@@ -21,6 +21,11 @@ class ToasterConfig:
     whisper_model_size: str = "tiny.en"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
+    no_speech_threshold: float = 0.7
+    max_snapshot_age_hours: int = 4
+    rate_limit_runs_per_minute: int = 10
+    hf_max_concurrent: int = 3
+    tool_register_cooldown_secs: float = 5.0
 
     def __post_init__(self) -> None:
         """Validate configuration parameters."""

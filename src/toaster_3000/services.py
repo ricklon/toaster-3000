@@ -219,39 +219,38 @@ class STTService:
         self._model = model
         self._lock = Lock()
 
-    def transcribe(self, audio: Tuple[int, Any]) -> str:
+    def transcribe(self, audio: Tuple[int, Any]) -> Tuple[str, float]:
         """Transcribe audio to text (thread-safe).
 
         Args:
             audio: Tuple of (sample_rate, audio_data) or audio bytes
 
         Returns:
-            Transcribed text
+            Tuple of (transcribed_text, avg_no_speech_prob) where
+            avg_no_speech_prob near 1.0 means silence/noise.
         """
         with self._lock:
             try:
-                # Handle different audio input formats
                 if isinstance(audio, tuple):
                     sample_rate, audio_data = audio
-                    # Convert to bytes
                     audio_bytes = io.BytesIO()
                     import soundfile as sf
-
                     sf.write(audio_bytes, audio_data.T, sample_rate, format="wav")
                     audio_bytes.seek(0)
                 else:
                     audio_bytes = audio
 
-                # Transcribe
                 segments, info = self._model.transcribe(audio_bytes)
 
-                # Collect all segments
-                text_segments = []
+                text_parts = []
+                probs = []
                 for segment in segments:
-                    text_segments.append(segment.text)
+                    text_parts.append(segment.text)
+                    probs.append(segment.no_speech_prob)
 
-                return " ".join(text_segments)
+                avg_no_speech_prob = sum(probs) / len(probs) if probs else 1.0
+                return " ".join(text_parts), avg_no_speech_prob
 
             except Exception as e:
                 print(f"Error transcribing audio: {e}")
-                return ""
+                return "", 1.0

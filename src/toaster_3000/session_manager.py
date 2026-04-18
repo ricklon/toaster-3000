@@ -1,6 +1,10 @@
 """Session management for Toaster 3000."""
 
+import json
+import os
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -27,14 +31,49 @@ class SessionManager:
         self._sessions: Dict[str, ToasterSession] = {}
         self._lock = Lock()
 
+    def _find_recent_snapshot(self) -> Optional[dict]:
+        """Return the most recent valid snapshot younger than max_snapshot_age_hours."""
+        snap_dir = Path(os.path.expanduser("~/.toaster3000/sessions"))
+        if not snap_dir.exists():
+            return None
+        max_age_secs = self.runtime.config.max_snapshot_age_hours * 3600
+        best = None
+        best_time = None
+        for path in snap_dir.glob("*.json"):
+            try:
+                data = json.loads(path.read_text())
+                saved_at = datetime.fromisoformat(data["saved_at"])
+                age = (datetime.now(timezone.utc) - saved_at).total_seconds()
+                if age <= max_age_secs:
+                    if best_time is None or saved_at > best_time:
+                        best = data
+                        best_time = saved_at
+            except Exception:
+                continue
+        return best
+
     def create_session(self) -> str:
-        """Create new session and return session ID.
+        """Create a new session, restoring the most recent snapshot if available.
 
         Returns:
             Unique session identifier
         """
-        session_id = str(uuid.uuid4())
+        snapshot = self._find_recent_snapshot()
+        if snapshot:
+            session_id = snapshot["session_id"]
+            print(f"Restoring session from snapshot: {session_id}")
+        else:
+            session_id = str(uuid.uuid4())
+
         session = ToasterSession(session_id, self.runtime)
+
+        if snapshot:
+            try:
+                session.restore_from_snapshot(snapshot)
+                print(f"Session restored: {len(session.chat_history.get_all())} messages, "
+                      f"{len(session._custom_tools)} tools")
+            except Exception as e:
+                print(f"Snapshot restore failed, starting fresh: {e}")
 
         with self._lock:
             self._sessions[session_id] = session

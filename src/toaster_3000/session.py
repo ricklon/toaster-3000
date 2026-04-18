@@ -146,6 +146,14 @@ class ToasterSession:
         # Queue for tools registered mid-run (rebuilt after run completes)
         self._pending_registrations: List[tuple] = []
 
+        # Rate limiting
+        from toaster_3000.rate_limit import PerSessionCooldown, TokenBucket
+        self._rate_limiter = TokenBucket(
+            rate=runtime.config.rate_limit_runs_per_minute / 60.0,
+            capacity=float(runtime.config.rate_limit_runs_per_minute),
+        )
+        self._register_cooldown = PerSessionCooldown(runtime.config.tool_register_cooldown_secs)
+
         # Each session owns its agent to prevent cross-session memory leakage
         self.agent = self._build_agent()
 
@@ -154,6 +162,8 @@ class ToasterSession:
         self._intro_played = False
         self.last_active: float = time.time()
         self._countdown_html: str = ""
+        # Persisted source for registered tools so they survive restarts
+        self._registered_tool_sources: List[tuple] = []
 
     def _build_agent(self) -> Any:
         """Create a ToolCallingAgent with the full toast tool suite."""
@@ -191,6 +201,13 @@ class ToasterSession:
         self, tool_name: str, python_code: str, description: str
     ) -> str:
         """Called by RegisterToolTool during a run — queues for post-run processing."""
+        if not self._register_cooldown.check_and_record():
+            secs = self._register_cooldown.seconds_remaining()
+            return (
+                f"Tool registration is on cooldown — please wait "
+                f"{secs:.0f}s before registering another tool."
+            )
+
         from toaster_3000.tool_audit import ToolAuditEntry
         from toaster_3000.tools import (
             RISK_NONE,
@@ -236,6 +253,7 @@ class ToasterSession:
             try:
                 new_tool = build_dynamic_tool(tool_name, python_code, description)
                 self._custom_tools.append(new_tool)
+                self._registered_tool_sources.append((tool_name, python_code, description))
                 self.runtime.tool_audit_store.append(
                     ToolAuditEntry(
                         session_id=self.session_id,
@@ -295,15 +313,65 @@ class ToasterSession:
         with self._lock:
             self.agent = self._build_agent()
 
-    def _start_toast_countdown(self, arguments: Dict[str, Any]) -> None:
-        """Launch a background thread that animates a toast countdown bar."""
+    # ── Snapshot / restore ──────────────────────────────────────────────────
+
+    def _snapshot_path(self) -> "Path":
+        import os
+        from pathlib import Path
+        d = Path(os.path.expanduser("~/.toaster3000/sessions"))
+        d.mkdir(parents=True, exist_ok=True)
+        return d / f"{self.session_id}.json"
+
+    def save_snapshot(self) -> None:
+        """Persist chat history, agent steps, and registered tools to disk."""
+        import json
+        from datetime import datetime, timezone
+        data = {
+            "session_id": self.session_id,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "chat_history": self.chat_history.get_all(),
+            "agent_steps": self._agent_steps,
+            "registered_tool_sources": [
+                {"tool_name": n, "python_code": c, "description": d}
+                for n, c, d in self._registered_tool_sources
+            ],
+        }
         try:
-            thickness = float(arguments.get("thickness_mm", 20))
-            darkness = str(arguments.get("darkness", "medium")).lower()
-            base = {"light": 60, "medium": 90, "dark": 120}.get(darkness, 90)
-            duration = max(10, int(base * (thickness / 20)))
-        except Exception:
-            duration = 60
+            path = self._snapshot_path()
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        except Exception as e:
+            print(f"Failed to save snapshot: {e}")
+
+    def restore_from_snapshot(self, data: Dict[str, Any]) -> None:
+        """Restore session state from a snapshot dict."""
+        from toaster_3000.tools import assess_dynamic_tool, build_dynamic_tool
+        self.chat_history.clear()
+        for msg in data.get("chat_history", []):
+            self.chat_history.add_message(msg["role"], msg["content"])
+        self._agent_steps = data.get("agent_steps", self._agent_steps)
+        for entry in data.get("registered_tool_sources", []):
+            try:
+                tool = build_dynamic_tool(
+                    entry["tool_name"], entry["python_code"], entry["description"]
+                )
+                self._custom_tools.append(tool)
+                self._registered_tool_sources.append(
+                    (entry["tool_name"], entry["python_code"], entry["description"])
+                )
+            except Exception as e:
+                print(f"Failed to restore tool '{entry['tool_name']}': {e}")
+        self.agent = self._build_agent()
+
+    def _start_toast_countdown_from_output(self, observation: str) -> None:
+        """Parse toast duration from tool output text and start countdown."""
+        import re
+        m = re.search(r"Time\s*[:\-]\s*(\d+)\s*s", observation, re.IGNORECASE)
+        duration = int(m.group(1)) if m else 60
+        self._start_toast_countdown(duration)
+
+    def _start_toast_countdown(self, duration: int) -> None:
+        """Launch a background thread that animates a toast countdown bar."""
+        duration = max(5, duration)
 
         def _run(session_ref, total: int) -> None:
             for remaining in range(total, -1, -1):
@@ -333,6 +401,14 @@ class ToasterSession:
             yield self.chat_history.format_html(), None
             return
 
+        if not self._rate_limiter.consume():
+            yield self.chat_history.format_html_partial(
+                "Whoa, too many requests! Even the Toaster 3000 needs a moment to cool down. "
+                "Please wait a few seconds before asking again."
+            ), None
+            return
+
+        from smolagents.agents import ToolOutput as AgentToolOutput
         from smolagents.memory import FinalAnswerStep
         from smolagents.memory import ToolCall as AgentToolCall
 
@@ -341,22 +417,27 @@ class ToasterSession:
         yield self.chat_history.format_html_thinking(), None
 
         final_response = ""
+        _waiting_for_toast = False
         try:
             with self._lock:
                 steps = self._agent_steps
 
-            for event in self.agent.run(
-                text, max_steps=steps, reset=False, stream=True
-            ):
-                if isinstance(event, AgentToolCall):
-                    status = _TOOL_STATUS.get(event.name, f"Using {event.name}")
-                    if event.name == "toast_calculator":
-                        self._start_toast_countdown(event.arguments or {})
-                    yield self.chat_history.format_html_thinking(status), None
-                elif isinstance(event, FinalAnswerStep):
-                    final_response = (
-                        str(event.output) if event.output is not None else ""
-                    )
+            with self.runtime.hf_semaphore:
+                for event in self.agent.run(
+                    text, max_steps=steps, reset=False, stream=True
+                ):
+                    if isinstance(event, AgentToolCall):
+                        status = _TOOL_STATUS.get(event.name, f"Using {event.name}")
+                        if event.name == "toast_calculator":
+                            _waiting_for_toast = True
+                        yield self.chat_history.format_html_thinking(status), None
+                    elif isinstance(event, AgentToolOutput) and _waiting_for_toast:
+                        _waiting_for_toast = False
+                        self._start_toast_countdown_from_output(event.observation or "")
+                    elif isinstance(event, FinalAnswerStep):
+                        final_response = (
+                            str(event.output) if event.output is not None else ""
+                        )
 
             self._flush_pending_registrations()
 
@@ -378,6 +459,7 @@ class ToasterSession:
             time.sleep(0.015)
 
         self.chat_history.add_message("assistant", final_response)
+        self.save_snapshot()
         audio = self._generate_tts(final_response)
         yield self.chat_history.format_html(), audio
 
@@ -390,8 +472,9 @@ class ToasterSession:
             return ""
         self.last_active = time.time()
         self.chat_history.add_message("user", user_input)
-        response = self._get_agent_response(user_input)
+        response = self._run_agent_with_hooks(user_input)
         self.chat_history.add_message("assistant", response)
+        self.save_snapshot()
         return response
 
     def process_text_input(self, text: str) -> Tuple[str, Optional[Tuple[int, Any]]]:
@@ -410,7 +493,7 @@ class ToasterSession:
         self.chat_history.add_message("user", text)
 
         # Get response from agent
-        agent_response = self._get_agent_response(text)
+        agent_response = self._run_agent_with_hooks(text)
 
         # Add bot response
         self.chat_history.add_message("assistant", agent_response)
@@ -420,28 +503,45 @@ class ToasterSession:
 
         return self.chat_history.format_html(), audio_data
 
-    def _get_agent_response(self, user_input: str) -> str:
-        """Get response from AI agent with conversation context.
+    def _run_agent_with_hooks(self, user_input: str) -> str:
+        """Run agent with streaming to enable countdown and tool hooks.
 
-        Args:
-            user_input: User's input text
-
-        Returns:
-            Agent's response text
+        Used by both the text and voice paths so features like the toast
+        countdown bar work regardless of how the user is interacting.
         """
-        try:
-            with self._lock:
-                steps = self._agent_steps
+        from smolagents.agents import ToolOutput as AgentToolOutput
+        from smolagents.memory import FinalAnswerStep
+        from smolagents.memory import ToolCall as AgentToolCall
 
-            response = self.agent.run(user_input, max_steps=steps, reset=False)
-            # Process any tools registered mid-run AFTER run completes
+        if not self._rate_limiter.consume():
+            return (
+                "Whoa, too many requests! Even the Toaster 3000 needs a moment to cool down. "
+                "Please wait a few seconds before asking again."
+            )
+
+        with self._lock:
+            steps = self._agent_steps
+
+        final_response = ""
+        _waiting_for_toast = False
+        try:
+            with self.runtime.hf_semaphore:
+                for event in self.agent.run(user_input, max_steps=steps, reset=False, stream=True):
+                    if isinstance(event, AgentToolCall):
+                        if event.name == "toast_calculator":
+                            _waiting_for_toast = True
+                    elif isinstance(event, AgentToolOutput) and _waiting_for_toast:
+                        _waiting_for_toast = False
+                        self._start_toast_countdown_from_output(event.observation or "")
+                    elif isinstance(event, FinalAnswerStep):
+                        final_response = str(event.output) if event.output is not None else ""
             self._flush_pending_registrations()
-            return str(response) if response else "I'm speechless! Ask me about toast?"
         except Exception as e:
             return (
                 f"Oh crumbs! Error: {str(e)[:100]}... "
                 f"Would you like to talk about bread instead?"
             )
+        return final_response or "I'm speechless! Ask me about toast?"
 
     def _generate_tts(self, text: str) -> Optional[Tuple[int, Any]]:
         """Generate TTS audio for text.
@@ -467,9 +567,9 @@ class ToasterSession:
         """
         try:
             # Transcribe audio to text
-            user_text = self.runtime.stt_service.transcribe(audio)
+            user_text, no_speech_prob = self.runtime.stt_service.transcribe(audio)
 
-            if not user_text or len(user_text.split()) < 2:
+            if not user_text or no_speech_prob > self.runtime.config.no_speech_threshold:
                 return self.chat_history.format_html(), None
 
             # Process as text input
