@@ -325,6 +325,8 @@ class ToasterSession:
 
     def save_snapshot(self) -> None:
         """Kick off a background write so the response hot path is not blocked."""
+        if self.session_id.startswith("bench-"):
+            return
         t = threading.Thread(target=self._write_snapshot, daemon=True)
         t.start()
 

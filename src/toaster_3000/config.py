@@ -15,7 +15,7 @@ class ToasterConfig:
     model_id: str = "google/gemma-4-26B-A4B-it"
     inference_mode: str = "hf"          # hf | ollama | mlx
     local_model_url: str = "http://localhost:11434"
-    max_agent_steps: int = 1
+    max_agent_steps: int = 2
     max_chat_history: int = 50
     tts_voice: str = "am_liam"
     tts_speed: float = 1.0

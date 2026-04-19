@@ -21,7 +21,7 @@ from toaster_3000.tools import TOOL_RISK_POLICY_TEXT
 def _render_voice_state(state: str) -> str:
     """Return HTML badge for the current wake-word voice state."""
     configs = {
-        "sleeping": ("💤", "Sleeping — say <strong>Hey Toaster</strong> to wake me up", "#8a6a3a", "#FFF3E0"),
+        "sleeping": ("🍞", "Ready — just start speaking", "#8a6a3a", "#FFF3E0"),
         "listening": ("👂", "Listening…", "#234b2c", "#E8F4EA"),
         "responding": ("🍞", "Responding…", "#5a3a1a", "#FFF3E0"),
     }
@@ -55,12 +55,12 @@ class ToasterApp:
         self._last_talk_state: Dict[str, Any] = {}
 
     def _create_continuous_handler(self) -> Any:
-        """Create a fastrtc ReplyOnStopWords handler with wake-word activation.
+        """Create a fastrtc ReplyOnPause handler.
 
-        Listens continuously via Moonshine STT. Activates the full
-        Whisper → Agent → Kokoro TTS pipeline only after a wake phrase.
+        Responds whenever the user stops speaking — no wake word needed.
+        Noise/silence is filtered by Whisper's no_speech_prob threshold.
         """
-        from fastrtc import AlgoOptions, ReplyOnStopWords, SileroVadOptions
+        from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions
 
         def continuous_audio_processor(
             audio: Tuple[int, Any],
@@ -146,15 +146,8 @@ class ToasterApp:
             min_silence_duration_ms=100,
         )
 
-        return ReplyOnStopWords(
+        return ReplyOnPause(
             continuous_audio_processor,
-            stop_words=[
-                "hey toaster",
-                "hey toast",
-                "hey toster",
-                "hey roaster",
-                "toaster 3000",
-            ],
             algo_options=algo_options,
             model_options=model_options,
         )
@@ -396,9 +389,9 @@ class ToasterApp:
                                     <span class="toaster-icon"></span>Toaster 3000
                                 </h1>
                                 <p class="voice-subtitle">
-                                    Allow microphone access, then click
-                                    <strong>Record</strong> — Toaster 3000 will
-                                    introduce itself and start listening.
+                                    Allow microphone access, click
+                                    <strong>Record</strong>, then just speak —
+                                    Toaster 3000 responds when you pause.
                                 </p>
                             </div>
                         </section>
